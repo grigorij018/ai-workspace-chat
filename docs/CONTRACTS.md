@@ -84,6 +84,7 @@ Notes:
 Notes:
 - `router_decision` is returned for routed chats and omitted for plain direct calls when routing is not involved.
 - Streaming responses must emit the same routing metadata before normal deltas when available.
+- Research/file citations keep using the existing chat source event contract. Deep research adds an answer-shaping instruction only; it does not add a new `ResponseMessage` payload shape.
 
 ## ToolResult
 
@@ -197,3 +198,4 @@ File, URL, Research, PPTX:
 - URL turns attach normalized URL file entries and retrieve fetched page text as a source, enabling summarization and Q&A with citations.
 - Web search turns set `features.web_search=true`; deep research turns set both `features.web_search=true` and `features.deep_research=true`.
 - PPTX turns create a chat-visible `.pptx` file artifact and then let the normal assistant response acknowledge it.
+- Research answer copy should be structured as `Summary`, `Key findings`, `Caveats`, and `Sources` when appropriate, while citations/sources are rendered by the existing chat UI from emitted `sources` metadata.

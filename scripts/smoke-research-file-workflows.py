@@ -41,7 +41,60 @@ CHECKS = [
     (
         "contracts document the unified flow",
         "docs/CONTRACTS.md",
-        ["parse -> chunk -> embed -> retrieve -> cite", "features.deep_research=true", "features.pptx_generation=true"],
+        [
+            "parse -> chunk -> embed -> retrieve -> cite",
+            "features.deep_research=true",
+            "features.pptx_generation=true",
+            "Summary",
+            "Key findings",
+        ],
+    ),
+    (
+        "runbook documents file workflow contract",
+        "docs/RESEARCH_FILE_WORKFLOWS.md",
+        [
+            "chat file attachment -> process_file -> Loader -> Document[] -> chunking -> embeddings -> vector DB -> get_sources_from_items -> answer with sources",
+            "| `pdf` |",
+            "| `docx` |",
+            "| `xlsx` |",
+            "| `csv` |",
+            "| `txt` |",
+            "| `md` |",
+        ],
+    ),
+    (
+        "runbook documents url workflow contract",
+        "docs/RESEARCH_FILE_WORKFLOWS.md",
+        [
+            "user message URL -> router type=url -> files[{ type=url }] -> get_content_from_url -> retrieval source -> summary/Q&A answer",
+            "URL Summary and Q&A",
+        ],
+    ),
+    (
+        "runbook documents research workflow contract",
+        "docs/RESEARCH_FILE_WORKFLOWS.md",
+        [
+            "router type=deep_research",
+            "multi-query",
+            "deduplicates URLs",
+            "Summary",
+            "Key findings",
+            "Caveats",
+            "Sources",
+        ],
+    ),
+    (
+        "runbook documents pptx workflow contract",
+        "docs/RESEARCH_FILE_WORKFLOWS.md",
+        [
+            "chat prompt -> router type=pptx_generation -> chat_pptx_generation_handler -> create_chat_pptx_file -> event type=files -> assistant attachment",
+            "ai-workspace-research-<unix_timestamp>.pptx",
+            "Problem",
+            "Solution",
+            "Architecture",
+            "Demo Flow",
+            "Roadmap",
+        ],
     ),
 ]
 

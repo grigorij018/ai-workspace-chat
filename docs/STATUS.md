@@ -11,6 +11,17 @@
 - Added PPTX generation from the current chat context with sections for title, problem, solution, architecture, demo flow, value, and roadmap; generated presentations are emitted as normal chat file attachments.
 - Updated `.env.example` so RAG embeddings point at the MWS/OpenAI-compatible gateway instead of silently defaulting to local model traffic.
 - Added router tests for deep research and PPTX routing plus a dependency-light smoke check in `scripts/smoke-research-file-workflows.py`.
+- Added `docs/RESEARCH_FILE_WORKFLOWS.md` as the acceptance runbook for file QA, URL summary/Q&A, deep research, PPTX export, file-format coverage, citation rendering expectations, and local-vs-live verification.
+
+### Research/File Demo Runbook
+
+- File QA path is documented as `chat file attachment -> process_file -> Loader -> Document[] -> chunking -> embeddings -> vector DB -> get_sources_from_items -> answer with sources`.
+- URL path is documented as `user message URL -> router type=url -> files[{ type=url }] -> get_content_from_url -> retrieval source -> summary/Q&A answer`.
+- Deep research path is documented as `research prompt -> router type=deep_research -> features.web_search + features.deep_research -> generate_queries -> process_web_search -> deduped URLs -> retrieved web collection -> concise cited answer`.
+- PPTX path is documented as `chat prompt -> router type=pptx_generation -> chat_pptx_generation_handler -> create_chat_pptx_file -> event type=files -> assistant attachment`.
+- Acceptance matrix covers `pdf`, `docx`, `xlsx`, `csv`, `txt`, and `md`, including expected ingestion and expected chat result for each format.
+- PPTX demo artifact expectations are documented: prompt example, `ai-workspace-research-<unix_timestamp>.pptx` file name pattern, content type, download URL shape, and minimum slide structure.
+- Cited-answer contract is documented as a prompt-level markdown response expectation (`Summary`, `Key findings`, `Caveats`, `Sources`) that reuses existing backend `sources` events and the current chat citation renderer instead of changing `ResponseMessage`.
 
 ### Verification Notes
 
