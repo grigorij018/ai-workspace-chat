@@ -2,6 +2,37 @@
 
 ## 2026-04-11
 
+### Completed in `feat/research-file-workflows`
+
+- Reused the existing OpenWebUI file pipeline for `pdf`, `docx`, `xlsx`, `csv`, `txt`, and `md`: loader extraction, chunking, embedding, vector storage, retrieval, and citation source injection remain in the shared chat path.
+- Added explicit router support for `deep_research` and `pptx_generation` while preserving manual model override behavior and normal MWS-backed model selection.
+- Normalized URL prompts into `type=url` chat file entries so URL summarization and Q&A flow through the same retrieval/citation path as attachments.
+- Expanded web research handling with a deep research mode: multi-query expansion, fetched/deduplicated URLs, RAG collection attachment, and a concise cited-answer contract for the answering model.
+- Added PPTX generation from the current chat context with sections for title, problem, solution, architecture, demo flow, value, and roadmap; generated presentations are emitted as normal chat file attachments.
+- Updated `.env.example` so RAG embeddings point at the MWS/OpenAI-compatible gateway instead of silently defaulting to local model traffic.
+- Added router tests for deep research and PPTX routing plus a dependency-light smoke check in `scripts/smoke-research-file-workflows.py`.
+- Added `docs/RESEARCH_FILE_WORKFLOWS.md` as the acceptance runbook for file QA, URL summary/Q&A, deep research, PPTX export, file-format coverage, citation rendering expectations, and local-vs-live verification.
+
+### Research/File Demo Runbook
+
+- File QA path is documented as `chat file attachment -> process_file -> Loader -> Document[] -> chunking -> embeddings -> vector DB -> get_sources_from_items -> answer with sources`.
+- URL path is documented as `user message URL -> router type=url -> files[{ type=url }] -> get_content_from_url -> retrieval source -> summary/Q&A answer`.
+- Deep research path is documented as `research prompt -> router type=deep_research -> features.web_search + features.deep_research -> generate_queries -> process_web_search -> deduped URLs -> retrieved web collection -> concise cited answer`.
+- PPTX path is documented as `chat prompt -> router type=pptx_generation -> chat_pptx_generation_handler -> create_chat_pptx_file -> event type=files -> assistant attachment`.
+- Acceptance matrix covers `pdf`, `docx`, `xlsx`, `csv`, `txt`, and `md`, including expected ingestion and expected chat result for each format.
+- PPTX demo artifact expectations are documented: prompt example, `ai-workspace-research-<unix_timestamp>.pptx` file name pattern, content type, download URL shape, and minimum slide structure.
+- Cited-answer contract is documented as a prompt-level markdown response expectation (`Summary`, `Key findings`, `Caveats`, `Sources`) that reuses existing backend `sources` events and the current chat citation renderer instead of changing `ResponseMessage`.
+
+### Verification Notes
+
+- `python3 scripts/smoke-research-file-workflows.py`: passed.
+- `python3 -m py_compile backend/open_webui/orchestrator/router.py backend/open_webui/orchestrator/research.py backend/open_webui/retrieval/loaders/main.py`: passed.
+- `python3 -m py_compile backend/open_webui/utils/middleware.py`: passed.
+- `PYTHONPATH=backend python3 -m unittest backend.open_webui.test.orchestrator.test_router`: blocked by missing local dependency `typer`.
+- `git commit -m "feat: wire research file workflows"`: created commit `d8167b45c`.
+- `git push origin feat/research-file-workflows`: blocked by workstation SSH auth (`Permission denied (publickey)`).
+- Live MWS RAG embedding, URL fetch, web search, and deep research verification still require valid `.env` credentials/provider settings.
+
 ### Completed in `feat/chat-panel-manual-mode`
 
 - Added a unified orchestration bar directly into the chat composer with `Auto / Manual`, model selector, upload, URL attach, voice, research, memory, memory panel, and safe mode controls.

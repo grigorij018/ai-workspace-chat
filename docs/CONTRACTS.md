@@ -15,6 +15,8 @@
   "features": {
     "memory": true,
     "web_search": false,
+    "deep_research": false,
+    "pptx_generation": false,
     "image_generation": false
   },
   "metadata": {
@@ -46,6 +48,10 @@ Notes:
 - Audio uploads should prefer `content_type`/`meta.content_type` like `audio/webm`, `audio/mpeg`, or `audio/wav`.
 - Image understanding stays in the same chat flow: user text plus one or more image attachments in `files`.
 - Audio requests that are successfully transcribed should continue through the normal shared chat pipeline as text.
+- File QA uses the existing chat `files` array and retrieval pipeline. Supported demo formats are `pdf`, `docx`, `xlsx`, `csv`, `txt`, and `md`; processing is `parse -> chunk -> embed -> retrieve -> cite`.
+- URL parsing uses `files` entries with `type=url`, `url`, and `name`. Plain URLs in user text are normalized into the same shape by the router.
+- Deep research uses `features.deep_research=true` and must stay in the same chat completion path. It performs multi-query web search, fetches/deduplicates sources, stores/retrieves web collections when embeddings are enabled, and instructs the answering model to return a concise structured answer with citations.
+- PPTX generation uses `features.pptx_generation=true`; the backend creates a `.pptx` artifact from the current chat context and returns it as a normal assistant file attachment.
 
 ## ChatResponse
 
@@ -78,6 +84,7 @@ Notes:
 Notes:
 - `router_decision` is returned for routed chats and omitted for plain direct calls when routing is not involved.
 - Streaming responses must emit the same routing metadata before normal deltas when available.
+- Research/file citations keep using the existing chat source event contract. Deep research adds an answer-shaping instruction only; it does not add a new `ResponseMessage` payload shape.
 
 ## ToolResult
 
@@ -132,9 +139,9 @@ Notes:
 ```
 
 Field rules:
-- `task_type`: `text`, `audio`, `vision`, `image_generation`, `file`, `url`, `web_research`
+- `task_type`: `text`, `audio`, `vision`, `image_generation`, `file`, `url`, `web_research`, `deep_research`, `pptx_generation`
 - `selected_model`: concrete MWS-backed model used for the answering step
-- `selected_tool`: `text_llm`, `asr`, `vlm`, `image_generation`, `file_qa`, `url_parse`, `web_research`
+- `selected_tool`: `text_llm`, `asr`, `vlm`, `image_generation`, `file_qa`, `url_parse`, `web_research`, `deep_research`, `pptx_generation`
 - `manual_override`: true when the user explicitly forced a model
 - `confidence`: float in `[0, 1]`
 - `short_reason`: short human-readable explanation suitable for chat metadata/debugging
@@ -185,3 +192,10 @@ Image generation:
 - Text prompts matching generation intent set `features.image_generation=true`.
 - The backend image generation handler emits generated artifacts through the existing chat file event path.
 - Assistant messages render those generated images as normal message attachments with `id`, `name`, `content_type`, and `url` when available.
+
+File, URL, Research, PPTX:
+- Uploaded `pdf`, `docx`, `xlsx`, `csv`, `txt`, and `md` files are processed through the retrieval pipeline and queried from the same chat turn when attached.
+- URL turns attach normalized URL file entries and retrieve fetched page text as a source, enabling summarization and Q&A with citations.
+- Web search turns set `features.web_search=true`; deep research turns set both `features.web_search=true` and `features.deep_research=true`.
+- PPTX turns create a chat-visible `.pptx` file artifact and then let the normal assistant response acknowledge it.
+- Research answer copy should be structured as `Summary`, `Key findings`, `Caveats`, and `Sources` when appropriate, while citations/sources are rendered by the existing chat UI from emitted `sources` metadata.

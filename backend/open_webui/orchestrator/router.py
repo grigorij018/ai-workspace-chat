@@ -13,6 +13,11 @@ from open_webui.storage.provider import Storage
 ROUTER_MODEL_ID = 'mws/router'
 
 IMAGE_PROMPT_PATTERN = re.compile(r'(нарисуй|сгенерируй|создай изображение|draw|generate image|create image)', re.I)
+PPTX_PROMPT_PATTERN = re.compile(
+    r'(презентац|powerpoint|pptx|slide deck|slides|deck|слайды|собер[ие] презентац)',
+    re.I,
+)
+DEEP_RESEARCH_PATTERN = re.compile(r'(deep research|глубокое исслед|исследуй подробно|research mode)', re.I)
 WEB_SEARCH_PATTERN = re.compile(r'(search|research|latest|news|найди|поиск|исследуй|последн|актуальн)', re.I)
 URL_PATTERN = re.compile(r'https?://[^\s)]+', re.I)
 
@@ -124,6 +129,8 @@ def _classify_task(prompt: str, files: list[dict], messages: list[dict], attachm
 
     if has_audio:
         return 'audio'
+    if PPTX_PROMPT_PATTERN.search(prompt or ''):
+        return 'pptx_generation'
     if IMAGE_PROMPT_PATTERN.search(prompt or ''):
         return 'image_generation'
     if has_image and (prompt or '').strip():
@@ -132,6 +139,8 @@ def _classify_task(prompt: str, files: list[dict], messages: list[dict], attachm
         return 'file'
     if has_url_file or URL_PATTERN.search(prompt or ''):
         return 'url'
+    if DEEP_RESEARCH_PATTERN.search(prompt or ''):
+        return 'deep_research'
     if WEB_SEARCH_PATTERN.search(prompt or ''):
         return 'web_research'
     return 'text'
@@ -158,6 +167,8 @@ def _select_model(
         'file': lambda caps: caps.get('text'),
         'url': lambda caps: caps.get('text'),
         'web_research': lambda caps: caps.get('text'),
+        'deep_research': lambda caps: caps.get('text'),
+        'pptx_generation': lambda caps: caps.get('text'),
     }
 
     predicate = priorities[task_type]
@@ -191,6 +202,8 @@ def _build_reason(task_type: str, manual_override: bool) -> str:
         'file': 'Detected attached file content and enabled file QA retrieval.',
         'url': 'Detected URL content and enabled URL parsing pipeline.',
         'web_research': 'Detected latest/search intent and enabled web research pipeline.',
+        'deep_research': 'Detected deep research intent and enabled multi-step web research.',
+        'pptx_generation': 'Detected presentation intent and enabled PPTX generation.',
     }
     return reasons[task_type]
 
@@ -210,6 +223,11 @@ def apply_router_decision(
 
     if decision.task_type == 'web_research':
         features['web_search'] = True
+    elif decision.task_type == 'deep_research':
+        features['web_search'] = True
+        features['deep_research'] = True
+    elif decision.task_type == 'pptx_generation':
+        features['pptx_generation'] = True
     elif decision.task_type == 'image_generation':
         features['image_generation'] = True
     elif decision.task_type == 'url':
@@ -303,7 +321,8 @@ def route_chat_request(request, form_data: dict, user, metadata: dict, model: di
         models,
         task_type,
         manual_override=manual_override,
-        allow_fallback=task_type in {'text', 'audio', 'file', 'url', 'web_research', 'image_generation'},
+        allow_fallback=task_type
+        in {'text', 'audio', 'file', 'url', 'web_research', 'deep_research', 'pptx_generation', 'image_generation'},
     )
     if not selected_model:
         raise HTTPException(status_code=400, detail=f'No model is available for task type {task_type}.')
@@ -316,6 +335,8 @@ def route_chat_request(request, form_data: dict, user, metadata: dict, model: di
         'file': 'file_qa',
         'url': 'url_parse',
         'web_research': 'web_research',
+        'deep_research': 'deep_research',
+        'pptx_generation': 'pptx_generation',
     }
     confidence_map = {
         'text': 0.72,
@@ -325,6 +346,8 @@ def route_chat_request(request, form_data: dict, user, metadata: dict, model: di
         'file': 0.9,
         'url': 0.88,
         'web_research': 0.94,
+        'deep_research': 0.94,
+        'pptx_generation': 0.91,
     }
 
     decision = RouterDecision(

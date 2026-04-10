@@ -7,12 +7,14 @@
 - Real multimodal capability matrix verification is currently blocked because `https://api.gpt.mws.ru/v1/models` returns `401` without a valid MWS API key in `.env`.
 - Real ASR/Whisper verification against MWS is blocked by the same missing credential; `https://api.gpt.mws.ru/v1/audio/transcriptions` currently returns `401`.
 - Real image-generation verification against MWS is blocked by the same missing credential; `https://api.gpt.mws.ru/v1/images/generations` currently returns `401`.
+- Real RAG embedding verification against MWS is blocked until `.env` provides `RAG_OPENAI_API_KEY`/`MWS_API_KEY` and an agreed `RAG_EMBEDDING_MODEL`.
+- Real web/deep-research verification depends on a working web-search provider configuration and outbound access from the demo environment.
 - Local environment is missing `pytest`, so the new router tests were added but could not be executed through pytest.
 - Import-time backend smoke tests that load the full `open_webui` package are blocked by missing local Python dependencies such as `typer`.
 - Frontend type/svelte checks are blocked in this workspace because the local JS toolchain dependencies are not installed (`svelte-kit: command not found`).
 - Automatic memory extraction from completed assistant responses is not implemented yet; the current backend supports typed fact/summary records, retrieval before answer, preferences, and forget/delete semantics.
 - The frontend memory transparency badge can currently detect newly created memory rows, but it cannot prove semantic extraction success when backend memory behavior only updates existing records or skips auto-save entirely.
-- `git push` from this workstation may be blocked in some worktrees by SSH auth (`Permission denied (publickey)`), so completed local commits may need a working GitHub SSH key or an alternate push environment.
+- `git push` from this workstation is blocked for `feat/research-file-workflows` by SSH auth (`Permission denied (publickey)`), so completed local commits need a working GitHub SSH key or an alternate push environment.
 
 ## Risks
 
