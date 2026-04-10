@@ -1,5 +1,43 @@
 # Status
 
+## 2026-04-11
+
+### Completed in `feat/multimodal-inputs`
+
+- Updated `docs/CONTRACTS.md` before the multimodal API changes with normalized `attachment_hints`, audio-to-text routing, and assistant attachment expectations.
+- Added MIME-based attachment hint normalization in the router so audio/image/url/file intent is inferred from uploaded attachment metadata instead of fragile UI-only heuristics.
+- Enabled router-assisted coexistence of manual model choice and auto-routing by sending `manual_override` plus `attachment_hints` from the unified chat payload.
+- Tightened image-understanding handling so non-vision manual model selections fail softly with a clear chat error instead of silently attempting an unsupported request.
+- Kept microphone input and audio file upload inside the single chat UX and preserved the shared chat pipeline behavior:
+  `microphone/audio upload -> ASR -> text -> normal chat completion`.
+- Enriched generated-image attachments so image generation/edit flows return full chat attachments (`id`, `name`, `content_type`, `url`) instead of bare URLs.
+- Expanded `.env.example` with MWS-friendly STT/image-generation settings so multimodal config remains env-driven.
+- Added router integration coverage for attachment hints and manual vision rejection.
+- Added demo assets in `demo-assets/multimodal/` for audio and image smoke checks in the unified chat.
+
+### Capability / Access Check
+
+- Live MWS capability discovery was attempted on 2026-04-11 against `https://api.gpt.mws.ru/v1/models`.
+- The endpoint responded with `401 Authentication Error, No api key passed in.`, so a real capability matrix could not be fetched from this branch workspace without credentials.
+- Live ASR access was also checked on 2026-04-11 against `https://api.gpt.mws.ru/v1/audio/transcriptions` and returned the same `401` auth error.
+- Live image generation access was checked on 2026-04-11 against `https://api.gpt.mws.ru/v1/images/generations` and also returned `401`.
+- Result: network reachability is confirmed, but real MWS model/ASR/image capability verification remains blocked on a valid MWS API key in `.env`.
+
+### Contract Check
+
+- Multimodal request/response changes were documented first in `docs/CONTRACTS.md`.
+- The implementation keeps everything inside the existing chat surface and reuses the shared chat pipeline instead of introducing separate modality-specific screens.
+
+### Verification Notes
+
+- `python3 -m compileall backend/open_webui/orchestrator/router.py backend/open_webui/routers/images.py backend/open_webui/utils/middleware.py backend/open_webui/test/orchestrator/test_router.py`: passed
+- `git diff --check`: passed
+- `curl -i https://api.gpt.mws.ru/v1/models`: reached MWS and returned `401` without API key
+- `curl -i -X POST https://api.gpt.mws.ru/v1/audio/transcriptions`: reached MWS and returned `401` without API key
+- `curl -i -X POST https://api.gpt.mws.ru/v1/images/generations`: reached MWS and returned `401` without API key
+- `PYTHONPATH=backend python3 -m unittest open_webui.test.orchestrator.test_router`: could not run because local dependency `typer` is missing
+- `npm run check`: could not run because local frontend dependency tooling is not installed (`svelte-kit: command not found`)
+
 ## 2026-04-10
 
 ### Completed in `chore/infra-release-readme`

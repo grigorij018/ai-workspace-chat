@@ -1,6 +1,8 @@
 import unittest
 from types import SimpleNamespace
 
+from fastapi import HTTPException
+
 from open_webui.orchestrator.registry import apply_capabilities, infer_capabilities
 from open_webui.orchestrator.router import ROUTER_MODEL_ID, route_chat_request
 
@@ -87,6 +89,55 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(decision.task_type, 'url')
         self.assertEqual(decision.selected_tool, 'url_parse')
         self.assertEqual(updated_form_data['files'][0]['type'], 'url')
+
+    def test_route_chat_request_preserves_attachment_hints_from_audio_files(self):
+        models = {
+            ROUTER_MODEL_ID: apply_capabilities({'id': ROUTER_MODEL_ID, 'name': 'Router', 'info': {'meta': {}}}),
+            'gpt-4.1-mini': apply_capabilities({'id': 'gpt-4.1-mini', 'name': 'GPT-4.1 Mini', 'info': {'meta': {}}}),
+        }
+        request = _build_request(models)
+
+        form_data = {
+            'model': ROUTER_MODEL_ID,
+            'messages': [{'role': 'user', 'content': 'Transcribe this'}],
+            'files': [{'id': 'file-audio-1', 'name': 'note.webm', 'content_type': 'audio/webm'}],
+        }
+        metadata = {'attachment_hints': [{'name': 'note.webm', 'content_type': 'audio/webm'}]}
+
+        with unittest.mock.patch(
+            'open_webui.orchestrator.router._get_audio_file_path', return_value='/tmp/note.webm'
+        ), unittest.mock.patch(
+            'open_webui.orchestrator.router.maybe_transcribe_audio',
+            return_value={'model': 'gpt-4.1-mini', 'messages': form_data['messages'], 'files': form_data['files']},
+        ):
+            updated_form_data, updated_metadata, _, decision = route_chat_request(
+                request, form_data, SimpleNamespace(id='user-1'), metadata, models[ROUTER_MODEL_ID]
+            )
+
+        self.assertEqual(decision.task_type, 'audio')
+        self.assertEqual(updated_form_data['model'], 'gpt-4.1-mini')
+        self.assertEqual(updated_metadata['attachment_hints'][0]['modality'], 'audio')
+        self.assertTrue(updated_metadata['attachment_hints'][0]['transcription_requested'])
+
+    def test_route_chat_request_rejects_manual_override_without_vision(self):
+        models = {
+            ROUTER_MODEL_ID: apply_capabilities({'id': ROUTER_MODEL_ID, 'name': 'Router', 'info': {'meta': {}}}),
+            'gpt-4.1-mini': apply_capabilities({'id': 'gpt-4.1-mini', 'name': 'GPT-4.1 Mini', 'info': {'meta': {}}}),
+        }
+        request = _build_request(models)
+
+        form_data = {
+            'model': ROUTER_MODEL_ID,
+            'messages': [{'role': 'user', 'content': 'What is on this image?'}],
+            'files': [{'id': 'file-image-1', 'name': 'photo.png', 'content_type': 'image/png', 'type': 'image'}],
+        }
+        metadata = {'manual_override': 'gpt-4.1-mini'}
+
+        with self.assertRaises(HTTPException) as exc:
+            route_chat_request(request, form_data, SimpleNamespace(id='user-1'), metadata, models[ROUTER_MODEL_ID])
+
+        self.assertEqual(exc.exception.status_code, 400)
+        self.assertIn('does not support image understanding', exc.exception.detail)
 
 
 if __name__ == '__main__':

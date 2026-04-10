@@ -577,6 +577,16 @@
 			return null;
 		}
 
+		const getUploadedFileType = (contentType: string = '', fallbackType: string = 'file') => {
+			if (contentType.startsWith('audio/') || contentType.startsWith('video/')) {
+				return 'audio';
+			}
+			if (contentType.startsWith('image/')) {
+				return 'image';
+			}
+			return fallbackType;
+		};
+
 		const tempItemId = uuidv4();
 		const fileItem = {
 			type: 'file',
@@ -633,6 +643,7 @@
 					fileItem.collection_name =
 						uploadedFile?.meta?.collection_name || uploadedFile?.collection_name;
 					fileItem.content_type = uploadedFile.meta?.content_type || uploadedFile.content_type;
+					fileItem.type = getUploadedFileType(fileItem.content_type ?? file.type, fileItem.type);
 					fileItem.url = `${uploadedFile.id}`;
 
 					files = files;

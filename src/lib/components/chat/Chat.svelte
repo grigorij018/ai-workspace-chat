@@ -155,6 +155,7 @@
 	let generating = false;
 	let dragged = false;
 	let generationController = null;
+	const ROUTER_MODEL_ID = 'mws/router';
 
 	let chat = null;
 	let tags = [];
@@ -1989,11 +1990,22 @@
 						!(model.info?.meta?.capabilities?.vision ?? true) &&
 						!imageGenerationEnabled
 					) {
-						toast.error(
-							$i18n.t('Model {{modelName}} is not vision capable', {
-								modelName: model.name ?? model.id
-							})
-						);
+						const errorMessage = $i18n.t('Model {{modelName}} is not vision capable', {
+							modelName: model.name ?? model.id
+						});
+						toast.error(errorMessage);
+
+						let responseMessageId =
+							responseMessageIds[`${modelId}-${modelIdx ? modelIdx : _modelIdx}`];
+						const responseMessage = history.messages[responseMessageId];
+						if (responseMessage) {
+							responseMessage.error = {
+								content: errorMessage
+							};
+							responseMessage.done = true;
+							history.messages[responseMessageId] = responseMessage;
+						}
+						return;
 					}
 
 					let responseMessageId =
@@ -2058,6 +2070,42 @@
 		}
 
 		return features;
+	};
+
+	const getAttachmentHint = (file) => {
+		const contentType = (file?.content_type ?? file?.file?.meta?.content_type ?? '').toLowerCase();
+		let modality = 'file';
+		let routing_intent = 'file';
+		let transcription_requested = false;
+
+		if (file?.type === 'url') {
+			modality = 'url';
+			routing_intent = 'url';
+		} else if (file?.type === 'image' || contentType.startsWith('image/')) {
+			modality = 'image';
+			routing_intent = 'vision';
+		} else if (file?.type === 'audio' || contentType.startsWith('audio/') || contentType.startsWith('video/')) {
+			modality = 'audio';
+			routing_intent = 'audio';
+			transcription_requested = true;
+		}
+
+		return {
+			key: `${file?.id ?? file?.url ?? file?.name ?? Math.random()}`,
+			id: file?.id,
+			name: file?.name,
+			content_type: contentType,
+			modality,
+			routing_intent,
+			transcription_requested
+		};
+	};
+
+	const buildAttachmentHints = (fileItems = []) => {
+		return fileItems
+			.filter(Boolean)
+			.map((file) => getAttachmentHint(file))
+			.filter((hint, index, array) => array.findIndex((item) => item.key === hint.key) === index);
 	};
 
 	const getStopTokens = () => {
@@ -2251,6 +2299,10 @@
 					...($terminalServers ?? []).filter((t) => !t.id)
 				],
 				features: getFeatures(),
+				metadata: {
+					...(model.id !== ROUTER_MODEL_ID ? { manual_override: model.id } : {}),
+					attachment_hints: buildAttachmentHints([...(userMessage?.files ?? []), ...files])
+				},
 				variables: {
 					...getPromptVariables(
 						$user?.name,
