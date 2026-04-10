@@ -2,6 +2,24 @@
 
 ## 2026-04-11
 
+### Completed in `feat/research-file-workflows`
+
+- Reused the existing OpenWebUI file pipeline for `pdf`, `docx`, `xlsx`, `csv`, `txt`, and `md`: loader extraction, chunking, embedding, vector storage, retrieval, and citation source injection remain in the shared chat path.
+- Added explicit router support for `deep_research` and `pptx_generation` while preserving manual model override behavior and normal MWS-backed model selection.
+- Normalized URL prompts into `type=url` chat file entries so URL summarization and Q&A flow through the same retrieval/citation path as attachments.
+- Expanded web research handling with a deep research mode: multi-query expansion, fetched/deduplicated URLs, RAG collection attachment, and a concise cited-answer contract for the answering model.
+- Added PPTX generation from the current chat context with sections for title, problem, solution, architecture, demo flow, value, and roadmap; generated presentations are emitted as normal chat file attachments.
+- Updated `.env.example` so RAG embeddings point at the MWS/OpenAI-compatible gateway instead of silently defaulting to local model traffic.
+- Added router tests for deep research and PPTX routing plus a dependency-light smoke check in `scripts/smoke-research-file-workflows.py`.
+
+### Verification Notes
+
+- `python3 scripts/smoke-research-file-workflows.py`: passed.
+- `python3 -m py_compile backend/open_webui/orchestrator/router.py backend/open_webui/orchestrator/research.py backend/open_webui/retrieval/loaders/main.py`: passed.
+- `python3 -m py_compile backend/open_webui/utils/middleware.py`: passed.
+- `PYTHONPATH=backend python3 -m unittest backend.open_webui.test.orchestrator.test_router`: blocked by missing local dependency `typer`.
+- Live MWS RAG embedding, URL fetch, web search, and deep research verification still require valid `.env` credentials/provider settings.
+
 ### Completed in `feat/chat-panel-manual-mode`
 
 - Added a unified orchestration bar directly into the chat composer with `Auto / Manual`, model selector, upload, URL attach, voice, research, memory, memory panel, and safe mode controls.

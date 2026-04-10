@@ -7,6 +7,8 @@
 - Real multimodal capability matrix verification is currently blocked because `https://api.gpt.mws.ru/v1/models` returns `401` without a valid MWS API key in `.env`.
 - Real ASR/Whisper verification against MWS is blocked by the same missing credential; `https://api.gpt.mws.ru/v1/audio/transcriptions` currently returns `401`.
 - Real image-generation verification against MWS is blocked by the same missing credential; `https://api.gpt.mws.ru/v1/images/generations` currently returns `401`.
+- Real RAG embedding verification against MWS is blocked until `.env` provides `RAG_OPENAI_API_KEY`/`MWS_API_KEY` and an agreed `RAG_EMBEDDING_MODEL`.
+- Real web/deep-research verification depends on a working web-search provider configuration and outbound access from the demo environment.
 - Local environment is missing `pytest`, so the new router tests were added but could not be executed through pytest.
 - Import-time backend smoke tests that load the full `open_webui` package are blocked by missing local Python dependencies such as `typer`.
 - Frontend type/svelte checks are blocked in this workspace because the local JS toolchain dependencies are not installed (`svelte-kit: command not found`).

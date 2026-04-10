@@ -59,6 +59,7 @@ from open_webui.routers.pipelines import (
 from open_webui.routers.memories import query_memory, QueryMemoryForm
 from open_webui.orchestrator.memory import get_memory_preference
 from open_webui.orchestrator.router import route_chat_request
+from open_webui.orchestrator.research import PPTX_CONTENT_TYPE, create_chat_pptx_file
 
 from open_webui.utils.webhook import post_webhook
 from open_webui.utils.files import (
@@ -1429,12 +1430,14 @@ async def chat_memory_handler(request: Request, form_data: dict, extra_params: d
 
 async def chat_web_search_handler(request: Request, form_data: dict, extra_params: dict, user):
     event_emitter = extra_params['__event_emitter__']
+    features = extra_params.get('__features__') or {}
+    deep_research = bool(features.get('deep_research'))
     await event_emitter(
         {
             'type': 'status',
             'data': {
                 'action': 'web_search',
-                'description': 'Searching the web',
+                'description': 'Deep research: searching the web' if deep_research else 'Searching the web',
                 'done': False,
             },
         }
@@ -1471,6 +1474,10 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
             queries = queries.get('queries', [])
         except Exception as e:
             queries = [response]
+
+        if deep_research:
+            expanded_queries = [user_message, *queries]
+            queries = list(dict.fromkeys([query for query in expanded_queries if query and query.strip()]))[:5]
 
         if ENABLE_QUERIES_CACHE:
             request.state.cached_queries = queries
@@ -1517,6 +1524,7 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
 
         if results:
             files = form_data.get('files', [])
+            filenames = list(dict.fromkeys(results['filenames']))
 
             if results.get('collection_names'):
                 for col_idx, collection_name in enumerate(results.get('collection_names')):
@@ -1524,8 +1532,8 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
                         {
                             'collection_name': collection_name,
                             'name': ', '.join(queries),
-                            'type': 'web_search',
-                            'urls': results['filenames'],
+                            'type': 'deep_research' if deep_research else 'web_search',
+                            'urls': filenames,
                             'queries': queries,
                         }
                     )
@@ -1536,8 +1544,8 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
                     {
                         'docs': docs,
                         'name': ', '.join(queries),
-                        'type': 'web_search',
-                        'urls': results['filenames'],
+                        'type': 'deep_research' if deep_research else 'web_search',
+                        'urls': filenames,
                         'queries': queries,
                     }
                 )
@@ -1549,8 +1557,10 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
                     'type': 'status',
                     'data': {
                         'action': 'web_search',
-                        'description': 'Searched {{count}} sites',
-                        'urls': results['filenames'],
+                        'description': 'Deep research checked {{count}} sources'
+                        if deep_research
+                        else 'Searched {{count}} sites',
+                        'urls': filenames,
                         'items': results.get('items', []),
                         'done': True,
                     },
@@ -1584,6 +1594,18 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
             }
         )
 
+    return form_data
+
+
+def apply_deep_research_answer_contract(form_data: dict) -> dict:
+    prompt = (
+        '<deep_research_answer_contract>'
+        'Answer concisely with a short structured summary, key findings, caveats, and sources. '
+        'Use citations from the retrieved source context for factual claims. '
+        'Deduplicate repeated sources and prefer primary or more recent sources when there is overlap.'
+        '</deep_research_answer_contract>'
+    )
+    form_data['messages'] = add_or_update_system_message(prompt, form_data['messages'], append=True)
     return form_data
 
 
@@ -1866,6 +1888,80 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
 
     if system_message_content:
         form_data['messages'] = add_or_update_system_message(system_message_content, form_data['messages'])
+
+    return form_data
+
+
+async def chat_pptx_generation_handler(request: Request, form_data: dict, extra_params: dict, user):
+    metadata = extra_params.get('__metadata__', {})
+    __event_emitter__ = extra_params.get('__event_emitter__', None)
+
+    if not __event_emitter__:
+        return form_data
+
+    await __event_emitter__(
+        {
+            'type': 'status',
+            'data': {'action': 'pptx_generation', 'description': 'Creating presentation', 'done': False},
+        }
+    )
+
+    try:
+        chat_id = metadata.get('chat_id')
+        if chat_id and not str(chat_id).startswith('local:'):
+            chat = Chats.get_chat_by_id_and_user_id(chat_id, user.id)
+            messages_map = (chat.chat or {}).get('history', {}).get('messages', {}) if chat else {}
+            message_id = (chat.chat or {}).get('history', {}).get('currentId') if chat else None
+            message_list = get_message_list(messages_map, message_id) if messages_map and message_id else form_data['messages']
+        else:
+            message_list = form_data.get('messages', [])
+
+        file_item = create_chat_pptx_file(user.id, message_list)
+        if not file_item:
+            raise ValueError('Presentation file could not be saved.')
+
+        file_payload = {
+            'id': file_item.id,
+            'type': 'file',
+            'name': file_item.filename,
+            'url': f'/api/v1/files/{file_item.id}/content?attachment=true',
+            'content_type': PPTX_CONTENT_TYPE,
+        }
+
+        await __event_emitter__(
+            {
+                'type': 'files',
+                'data': {'files': [file_payload]},
+            }
+        )
+        await __event_emitter__(
+            {
+                'type': 'status',
+                'data': {'action': 'pptx_generation', 'description': 'Presentation created', 'done': True},
+            }
+        )
+
+        form_data['messages'] = add_or_update_system_message(
+            '<context>A PPTX presentation has been generated from the current chat and attached for the user. Acknowledge the file briefly.</context>',
+            form_data['messages'],
+        )
+    except Exception as e:
+        log.exception(e)
+        await __event_emitter__(
+            {
+                'type': 'status',
+                'data': {
+                    'action': 'pptx_generation',
+                    'description': 'Presentation generation failed',
+                    'done': True,
+                    'error': True,
+                },
+            }
+        )
+        form_data['messages'] = add_or_update_system_message(
+            f'<context>PPTX generation was attempted but failed. Tell the user this error occurred: {e}</context>',
+            form_data['messages'],
+        )
 
     return form_data
 
@@ -2353,11 +2449,16 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             # Skip forced RAG web search when native FC is enabled - model can use web_search tool
             if metadata.get('params', {}).get('function_calling') != 'native':
                 form_data = await chat_web_search_handler(request, form_data, extra_params, user)
+                if features.get('deep_research'):
+                    form_data = apply_deep_research_answer_contract(form_data)
 
         if 'image_generation' in features and features['image_generation']:
             # Skip forced image generation when native FC is enabled - model can use generate_image tool
             if metadata.get('params', {}).get('function_calling') != 'native':
                 form_data = await chat_image_generation_handler(request, form_data, extra_params, user)
+
+        if 'pptx_generation' in features and features['pptx_generation']:
+            form_data = await chat_pptx_generation_handler(request, form_data, extra_params, user)
 
         if 'code_interpreter' in features and features['code_interpreter']:
             engine = getattr(request.app.state.config, 'CODE_INTERPRETER_ENGINE', 'pyodide')

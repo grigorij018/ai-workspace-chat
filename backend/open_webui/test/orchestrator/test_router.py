@@ -47,6 +47,50 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(routed_model['id'], 'gpt-4.1-mini')
         self.assertEqual(updated_metadata['selected_model_id'], 'gpt-4.1-mini')
 
+    def test_route_chat_request_uses_deep_research_mode(self):
+        models = {
+            ROUTER_MODEL_ID: apply_capabilities({'id': ROUTER_MODEL_ID, 'name': 'Router', 'info': {'meta': {}}}),
+            'gpt-4.1-mini': apply_capabilities({'id': 'gpt-4.1-mini', 'name': 'GPT-4.1 Mini', 'info': {'meta': {}}}),
+        }
+        request = _build_request(models)
+
+        form_data = {
+            'model': ROUTER_MODEL_ID,
+            'messages': [{'role': 'user', 'content': 'Deep research: compare RAG approaches'}],
+        }
+        metadata = {}
+
+        updated_form_data, updated_metadata, _, decision = route_chat_request(
+            request, form_data, SimpleNamespace(id='user-1'), metadata, models[ROUTER_MODEL_ID]
+        )
+
+        self.assertEqual(decision.task_type, 'deep_research')
+        self.assertEqual(decision.selected_tool, 'deep_research')
+        self.assertTrue(updated_form_data['features']['web_search'])
+        self.assertTrue(updated_form_data['features']['deep_research'])
+        self.assertEqual(updated_metadata['selected_model_id'], 'gpt-4.1-mini')
+
+    def test_route_chat_request_uses_pptx_generation(self):
+        models = {
+            ROUTER_MODEL_ID: apply_capabilities({'id': ROUTER_MODEL_ID, 'name': 'Router', 'info': {'meta': {}}}),
+            'gpt-4.1-mini': apply_capabilities({'id': 'gpt-4.1-mini', 'name': 'GPT-4.1 Mini', 'info': {'meta': {}}}),
+        }
+        request = _build_request(models)
+
+        form_data = {
+            'model': ROUTER_MODEL_ID,
+            'messages': [{'role': 'user', 'content': 'Собери презентацию по текущему диалогу'}],
+        }
+        metadata = {}
+
+        updated_form_data, _, _, decision = route_chat_request(
+            request, form_data, SimpleNamespace(id='user-1'), metadata, models[ROUTER_MODEL_ID]
+        )
+
+        self.assertEqual(decision.task_type, 'pptx_generation')
+        self.assertEqual(decision.selected_tool, 'pptx_generation')
+        self.assertTrue(updated_form_data['features']['pptx_generation'])
+
     def test_route_chat_request_respects_manual_override(self):
         models = {
             ROUTER_MODEL_ID: apply_capabilities({'id': ROUTER_MODEL_ID, 'name': 'Router', 'info': {'meta': {}}}),
