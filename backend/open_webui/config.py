@@ -1053,9 +1053,12 @@ ENABLE_OPENAI_API = PersistentConfig(
     os.environ.get('ENABLE_OPENAI_API', 'True').lower() == 'true',
 )
 
+MWS_API_KEY = os.environ.get('MWS_API_KEY', '')
+MWS_BASE_URL = os.environ.get('MWS_BASE_URL', 'https://api.gpt.mws.ru/v1').rstrip('/')
+MWS_ROUTER_MODEL_NAME = os.environ.get('MWS_ROUTER_MODEL_NAME', 'MWS Auto Router')
 
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
-OPENAI_API_BASE_URL = os.environ.get('OPENAI_API_BASE_URL', '')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', MWS_API_KEY)
+OPENAI_API_BASE_URL = os.environ.get('OPENAI_API_BASE_URL', MWS_BASE_URL)
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 GEMINI_API_BASE_URL = os.environ.get('GEMINI_API_BASE_URL', '')

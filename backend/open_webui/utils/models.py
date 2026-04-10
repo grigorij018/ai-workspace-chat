@@ -32,6 +32,8 @@ from open_webui.config import (
 
 from open_webui.env import BYPASS_MODEL_ACCESS_CONTROL, GLOBAL_LOG_LEVEL
 from open_webui.models.users import UserModel
+from open_webui.orchestrator.registry import apply_capabilities
+from open_webui.orchestrator.router import build_router_model_entry
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
@@ -56,7 +58,7 @@ async def fetch_ollama_models(request: Request, user: UserModel = None):
 
 async def fetch_openai_models(request: Request, user: UserModel = None):
     openai_response = await openai.get_all_models(request, user=user)
-    return openai_response['data']
+    return [apply_capabilities(model) for model in openai_response['data']]
 
 
 async def get_all_base_models(request: Request, user: UserModel = None):
@@ -74,7 +76,7 @@ async def get_all_base_models(request: Request, user: UserModel = None):
 
     openai_models, ollama_models, function_models = await asyncio.gather(openai_task, ollama_task, function_task)
 
-    return function_models + openai_models + ollama_models
+    return [build_router_model_entry(), *function_models, *openai_models, *ollama_models]
 
 
 async def get_all_models(request, refresh: bool = False, user: UserModel = None):

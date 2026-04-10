@@ -4,6 +4,9 @@
 
 - Continuous PR watching and post-merge smoke execution cannot be automated from this branch alone; that requires team process or additional GitHub automation around `develop`.
 - Real end-to-end chat verification is blocked on valid MWS GPT credentials and agreed demo model IDs.
+- Local environment is missing `pytest`, so the new router tests were added but could not be executed through pytest.
+- Import-time backend smoke tests that load the full `open_webui` package are blocked by missing local Python dependencies such as `typer`.
+- Automatic memory extraction from completed assistant responses is not implemented yet; the current backend supports typed fact/summary records, retrieval before answer, preferences, and forget/delete semantics.
 
 ## Risks
 
@@ -17,3 +20,5 @@
 - Keep the demo checklist explicit and rehearse with a real `.env` before the handoff.
 - Use repository or organization secrets for CI, never committed values.
 - Expand smoke tests only after the model IDs and auth/bootstrap policy are stable.
+- Install backend Python dependencies in the shared dev environment before running full router/backend test passes.
+- Treat automatic memory extraction as a follow-up implementation item, while keeping manual/typed memory records available for the demo path.

@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from open_webui.internal.db import Base, get_db, get_db_context
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Column, String, Text
+from sqlalchemy import BigInteger, Boolean, Column, String, Text
 
 ####################
 # Memory DB Schema
@@ -19,7 +19,10 @@ class Memory(Base):
 
     id = Column(String, primary_key=True, unique=True)
     user_id = Column(String)
+    kind = Column(String, default='fact')
     content = Column(Text)
+    source = Column(String, nullable=True)
+    enabled = Column(Boolean, default=True)
     updated_at = Column(BigInteger)
     created_at = Column(BigInteger)
 
@@ -27,7 +30,10 @@ class Memory(Base):
 class MemoryModel(BaseModel):
     id: str
     user_id: str
+    kind: str = 'fact'
     content: str
+    source: Optional[str] = None
+    enabled: bool = True
     updated_at: int  # timestamp in epoch
     created_at: int  # timestamp in epoch
 
@@ -44,6 +50,9 @@ class MemoriesTable:
         self,
         user_id: str,
         content: str,
+        kind: str = 'fact',
+        source: Optional[str] = None,
+        enabled: bool = True,
         db: Optional[Session] = None,
     ) -> Optional[MemoryModel]:
         with get_db_context(db) as db:
@@ -53,7 +62,10 @@ class MemoriesTable:
                 **{
                     'id': id,
                     'user_id': user_id,
+                    'kind': kind,
                     'content': content,
+                    'source': source,
+                    'enabled': enabled,
                     'created_at': int(time.time()),
                     'updated_at': int(time.time()),
                 }
@@ -72,6 +84,9 @@ class MemoriesTable:
         id: str,
         user_id: str,
         content: str,
+        kind: Optional[str] = None,
+        source: Optional[str] = None,
+        enabled: Optional[bool] = None,
         db: Optional[Session] = None,
     ) -> Optional[MemoryModel]:
         with get_db_context(db) as db:
@@ -81,6 +96,12 @@ class MemoriesTable:
                     return None
 
                 memory.content = content
+                if kind is not None:
+                    memory.kind = kind
+                if source is not None:
+                    memory.source = source
+                if enabled is not None:
+                    memory.enabled = enabled
                 memory.updated_at = int(time.time())
 
                 db.commit()
@@ -101,6 +122,14 @@ class MemoriesTable:
         with get_db_context(db) as db:
             try:
                 memories = db.query(Memory).filter_by(user_id=user_id).all()
+                return [MemoryModel.model_validate(memory) for memory in memories]
+            except Exception:
+                return None
+
+    def get_enabled_memories_by_user_id(self, user_id: str, db: Optional[Session] = None) -> list[MemoryModel]:
+        with get_db_context(db) as db:
+            try:
+                memories = db.query(Memory).filter_by(user_id=user_id, enabled=True).all()
                 return [MemoryModel.model_validate(memory) for memory in memories]
             except Exception:
                 return None

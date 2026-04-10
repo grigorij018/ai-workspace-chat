@@ -14,19 +14,39 @@
 - Filled architecture, feature matrix, blockers, and demo docs for release coordination.
 - Prepared a single CI workflow for lint, backend smoke tests, and frontend smoke.
 
+### Completed in `feat/openwebui-routing-memory`
+
+- Added an MWS-backed orchestration layer for OpenWebUI backend with an explicit virtual router model `mws/router`.
+- Default OpenAI-compatible backend now falls back to `MWS_BASE_URL` and `MWS_API_KEY` when `OPENAI_*` env vars are unset.
+- Implemented capability inference/registry for text, vision, audio, embeddings, and image generation models.
+- Added backend orchestrator endpoints for model sync and router decision preview.
+- Integrated routing into the existing chat path without replacing the single-chat UX:
+  `text -> text llm`, `audio -> asr preprocessing`, `image + question -> vlm`, `draw/generate image -> image generation`, `file -> file qa`, `url -> url parse`, `search/latest/research -> web research`.
+- Extended long-term memory records with `kind`, `source`, and `enabled`, plus user memory preferences for opt-in/opt-out.
+- Added router smoke tests and verified changed backend files with `python3 -m compileall`.
+- Added project contracts and handoff notes in `docs/CONTRACTS.md`.
+
 ### Contract Check
 
-- No shared API changes in this stage.
-- [docs/CONTRACTS.md](CONTRACTS.md) does not need an update for these infra/docs-only changes.
+- Shared backend contracts are now documented in `docs/CONTRACTS.md`.
+- Infra/docs stage did not change API shape, but routing/memory stage introduced and documented orchestration and memory contracts.
+- Agents 2–4 should now use `docs/CONTRACTS.md` as the source of truth before implementing UI, multimodal, and tools flows.
 
 ### Verification Notes
 
 - `bash ./scripts/check-no-secrets.sh`: passed
+- `bash -n scripts/check-no-secrets.sh scripts/smoke.sh`: passed
+- `git diff --check`: passed
 - `docker compose --env-file .env config`: passed with a temporary local `.env`
+- `python3 -m compileall ...`: passed for changed backend routing files
 - Local `make up` could not complete in this workstation session because the Docker daemon was not available
+- `pytest` and full backend import-time smoke were not completed because local Python dependencies such as `pytest` and `typer` were missing
 
 ### Next Useful Steps
 
+- Merge these foundations into `develop` and use them as the baseline for Agents 2 and 3.
 - Validate the exact MWS model IDs the demo should pin in `DEFAULT_MODELS` and `TASK_MODEL`.
+- Launch frontend/manual-mode work on top of `docs/CONTRACTS.md`.
+- Launch multimodal work with an early capability check for Whisper, VLM, and image generation paths.
 - Extend smoke coverage from auth/landing into one real chat completion in an environment with demo credentials.
 - Decide whether SQLite remains enough for demo/release or whether Postgres becomes a required profile later.

@@ -57,6 +57,8 @@ from open_webui.routers.pipelines import (
     process_pipeline_outlet_filter,
 )
 from open_webui.routers.memories import query_memory, QueryMemoryForm
+from open_webui.orchestrator.memory import get_memory_preference
+from open_webui.orchestrator.router import route_chat_request
 
 from open_webui.utils.webhook import post_webhook
 from open_webui.utils.files import (
@@ -2140,6 +2142,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             form_data['model'] = selected_model_id
             metadata['selected_model_id'] = selected_model_id
 
+    form_data, metadata, model, router_decision = route_chat_request(request, form_data, user, metadata, model)
+
     form_data = apply_params_to_form_data(form_data, model)
     log.debug(f'form_data: {form_data}')
 
@@ -2319,6 +2323,12 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         raise Exception(f'{e}')
 
     features = form_data.pop('features', None) or {}
+    memory_preference = get_memory_preference(user.id)
+    if 'memory' not in features and memory_preference.enabled:
+        features['memory'] = True
+
+    if router_decision:
+        events.append({'router_decision': router_decision.model_dump()})
     extra_params['__features__'] = features
     if features:
         if 'voice' in features and features['voice']:
