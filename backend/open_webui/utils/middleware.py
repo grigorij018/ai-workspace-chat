@@ -1685,6 +1685,19 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
     if not chat_id or not isinstance(chat_id, str) or not __event_emitter__:
         return form_data
 
+    def _serialize_generated_files(images: list[dict]) -> list[dict]:
+        return [
+            {
+                'id': image.get('id'),
+                'type': image.get('type', 'image'),
+                'name': image.get('name', 'generated-image'),
+                'url': image.get('url'),
+                'content_type': image.get('content_type', 'image/png'),
+            }
+            for image in images
+            if image.get('url')
+        ]
+
     if chat_id.startswith('local:'):
         message_list = form_data.get('messages', [])
     else:
@@ -1740,13 +1753,7 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                 {
                     'type': 'files',
                     'data': {
-                        'files': [
-                            {
-                                'type': 'image',
-                                'url': image['url'],
-                            }
-                            for image in images
-                        ]
+                        'files': _serialize_generated_files(images)
                     },
                 }
             )
@@ -1829,13 +1836,7 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                 {
                     'type': 'files',
                     'data': {
-                        'files': [
-                            {
-                                'type': 'image',
-                                'url': image['url'],
-                            }
-                            for image in images
-                        ]
+                        'files': _serialize_generated_files(images)
                     },
                 }
             )

@@ -50,6 +50,28 @@ IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 router = APIRouter()
 
 
+def _read_file_item_value(file_item, key: str, default=None):
+    if isinstance(file_item, dict):
+        return file_item.get(key, default)
+    return getattr(file_item, key, default)
+
+
+def build_generated_image_attachment(file_item, url: str, content_type: str | None = None) -> dict:
+    meta = _read_file_item_value(file_item, 'meta', {}) or {}
+    name = (
+        _read_file_item_value(file_item, 'filename')
+        or _read_file_item_value(file_item, 'name')
+        or 'generated-image'
+    )
+    return {
+        'id': _read_file_item_value(file_item, 'id'),
+        'type': 'image',
+        'name': name,
+        'url': url,
+        'content_type': content_type or meta.get('content_type') or 'image/png',
+    }
+
+
 def set_image_model(request: Request, model: str):
     log.info(f'Setting image model to {model}')
     request.app.state.config.IMAGE_GENERATION_MODEL = model
@@ -590,8 +612,8 @@ async def image_generations(
                 else:
                     image_data, content_type = get_image_data(image['b64_json'])
 
-                _, url = upload_image(request, image_data, content_type, {**data, **metadata}, user)
-                images.append({'url': url})
+                file_item, url = upload_image(request, image_data, content_type, {**data, **metadata}, user)
+                images.append(build_generated_image_attachment(file_item, url, content_type))
             return images
 
         elif request.app.state.config.IMAGE_GENERATION_ENGINE == 'gemini':
@@ -635,21 +657,21 @@ async def image_generations(
             if model.endswith(':predict'):
                 for image in res['predictions']:
                     image_data, content_type = get_image_data(image['bytesBase64Encoded'])
-                    _, url = upload_image(request, image_data, content_type, {**data, **metadata}, user)
-                    images.append({'url': url})
+                    file_item, url = upload_image(request, image_data, content_type, {**data, **metadata}, user)
+                    images.append(build_generated_image_attachment(file_item, url, content_type))
             elif model.endswith(':generateContent'):
                 for image in res['candidates']:
                     for part in image['content']['parts']:
                         if part.get('inlineData', {}).get('data'):
                             image_data, content_type = get_image_data(part['inlineData']['data'])
-                            _, url = upload_image(
+                            file_item, url = upload_image(
                                 request,
                                 image_data,
                                 content_type,
                                 {**data, **metadata},
                                 user,
                             )
-                            images.append({'url': url})
+                            images.append(build_generated_image_attachment(file_item, url, content_type))
 
             return images
 
@@ -695,14 +717,14 @@ async def image_generations(
                     headers = {'Authorization': f'Bearer {request.app.state.config.COMFYUI_API_KEY}'}
 
                 image_data, content_type = get_image_data(image['url'], headers)
-                _, url = upload_image(
+                file_item, url = upload_image(
                     request,
                     image_data,
                     content_type,
                     {**form_data.model_dump(exclude_none=True), **metadata},
                     user,
                 )
-                images.append({'url': url})
+                images.append(build_generated_image_attachment(file_item, url, content_type))
             return images
         elif (
             request.app.state.config.IMAGE_GENERATION_ENGINE == 'automatic1111'
@@ -742,14 +764,14 @@ async def image_generations(
 
             for image in res['images']:
                 image_data, content_type = get_image_data(image)
-                _, url = upload_image(
+                file_item, url = upload_image(
                     request,
                     image_data,
                     content_type,
                     {**data, 'info': res['info'], **metadata},
                     user,
                 )
-                images.append({'url': url})
+                images.append(build_generated_image_attachment(file_item, url, content_type))
             return images
     except Exception as e:
         error = e
@@ -905,8 +927,8 @@ async def image_edits(
                 else:
                     image_data, content_type = get_image_data(image['b64_json'])
 
-                _, url = upload_image(request, image_data, content_type, {**data, **metadata}, user)
-                images.append({'url': url})
+                file_item, url = upload_image(request, image_data, content_type, {**data, **metadata}, user)
+                images.append(build_generated_image_attachment(file_item, url, content_type))
             return images
 
         elif request.app.state.config.IMAGE_EDIT_ENGINE == 'gemini':
@@ -956,14 +978,14 @@ async def image_edits(
                 for part in image['content']['parts']:
                     if part.get('inlineData', {}).get('data'):
                         image_data, content_type = get_image_data(part['inlineData']['data'])
-                        _, url = upload_image(
+                        file_item, url = upload_image(
                             request,
                             image_data,
                             content_type,
                             {**data, **metadata},
                             user,
                         )
-                        images.append({'url': url})
+                        images.append(build_generated_image_attachment(file_item, url, content_type))
 
             return images
 
@@ -1036,14 +1058,14 @@ async def image_edits(
                     headers = {'Authorization': f'Bearer {request.app.state.config.IMAGES_EDIT_COMFYUI_API_KEY}'}
 
                 image_data, content_type = get_image_data(image_url, headers)
-                _, url = upload_image(
+                file_item, url = upload_image(
                     request,
                     image_data,
                     content_type,
                     {**form_data.model_dump(exclude_none=True), **metadata},
                     user,
                 )
-                images.append({'url': url})
+                images.append(build_generated_image_attachment(file_item, url, content_type))
 
             return images
     except Exception as e:

@@ -21,6 +21,15 @@
     "chat_id": "chat_123",
     "message_id": "msg_123",
     "manual_override": null,
+    "attachment_hints": [
+      {
+        "name": "voice-note.webm",
+        "content_type": "audio/webm",
+        "modality": "audio",
+        "routing_intent": "audio",
+        "transcription_requested": true
+      }
+    ],
     "memory": {
       "enabled": true,
       "save": true
@@ -33,6 +42,10 @@ Notes:
 - `model` may point to a concrete MWS-backed model or the virtual auto-router model `mws/router`.
 - `metadata.manual_override` forces a concrete model and bypasses auto-selection.
 - `files` may include uploaded files, images, audio, urls, collections, and web-search artifacts.
+- `metadata.attachment_hints` is optional normalized attachment metadata produced from MIME types and UI context.
+- Audio uploads should prefer `content_type`/`meta.content_type` like `audio/webm`, `audio/mpeg`, or `audio/wav`.
+- Image understanding stays in the same chat flow: user text plus one or more image attachments in `files`.
+- Audio requests that are successfully transcribed should continue through the normal shared chat pipeline as text.
 
 ## ChatResponse
 
@@ -125,3 +138,50 @@ Field rules:
 - `manual_override`: true when the user explicitly forced a model
 - `confidence`: float in `[0, 1]`
 - `short_reason`: short human-readable explanation suitable for chat metadata/debugging
+
+## Attachment Hint
+
+```json
+{
+  "name": "photo.png",
+  "content_type": "image/png",
+  "modality": "image",
+  "routing_intent": "vision",
+  "transcription_requested": false
+}
+```
+
+Field rules:
+- `modality`: `audio`, `image`, `file`, `url`, or `unknown`
+- `routing_intent`: normalized router hint derived from MIME/UI context; expected values are `audio`, `vision`, `file`, `url`, `image_generation`, or `text`
+- `transcription_requested`: true when the client expects ASR preprocessing for this attachment
+
+## Attachment Response Flow
+
+Notes:
+- Assistant-side image generation returns generated image files as normal chat message attachments.
+- Streaming/file events should keep using the existing chat event channel and emit `chat:message:files` when generated artifacts are ready.
+- Soft failures for missing modality support or missing access should surface as normal chat errors/status updates instead of forcing a separate multimodal screen.
+
+## Multimodal Chat Paths
+
+Audio file upload:
+- Client uploads an audio/video MIME attachment through the normal chat composer.
+- The attachment adapter emits `routing_intent=audio` and `transcription_requested=true`.
+- Router runs ASR preprocessing, prepends the transcript as `[Audio transcript]`, switches to a text model when auto-routed, and continues through the normal chat completion path.
+- Missing file access, empty transcripts, missing ASR access, or unsupported audio MIME should return normal chat errors/status updates.
+
+Microphone input:
+- The existing `VoiceRecording` chat component records browser audio with `MediaRecorder`.
+- It calls the `/audio/transcriptions` frontend API helper and inserts returned text into the existing composer.
+- The user can then send that text through the same chat request pipeline as typed text.
+
+Image understanding:
+- Client sends the image attachment as an `image_url` content part plus an attachment hint with `routing_intent=vision`.
+- Router selects a vision-capable model when available.
+- If a manually selected model lacks vision capability, the request should fail gracefully with a chat-visible error instead of attempting a non-vision call.
+
+Image generation:
+- Text prompts matching generation intent set `features.image_generation=true`.
+- The backend image generation handler emits generated artifacts through the existing chat file event path.
+- Assistant messages render those generated images as normal message attachments with `id`, `name`, `content_type`, and `url` when available.

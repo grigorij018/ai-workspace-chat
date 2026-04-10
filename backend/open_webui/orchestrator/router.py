@@ -2,6 +2,8 @@ import re
 from pathlib import Path
 from typing import Optional
 
+from fastapi import HTTPException
+
 from open_webui.models.files import Files
 from open_webui.orchestrator.registry import build_router_model
 from open_webui.orchestrator.schemas import RouterDecision
@@ -44,11 +46,69 @@ def _resolve_file_content_type(file_item: dict) -> str:
     ).lower()
 
 
-def _classify_task(prompt: str, files: list[dict], messages: list[dict]) -> str:
-    has_image = _detect_message_images(messages)
-    has_audio = False
-    has_file = False
-    has_url_file = False
+def _get_attachment_key(file_item: dict) -> str:
+    return str(file_item.get('id') or file_item.get('url') or file_item.get('name') or file_item)
+
+
+def _infer_attachment_hint(file_item: dict) -> dict:
+    file_type = (file_item.get('type') or '').lower()
+    content_type = _resolve_file_content_type(file_item)
+    modality = 'file'
+    routing_intent = 'file'
+    transcription_requested = False
+
+    if file_type == 'url':
+        modality = 'url'
+        routing_intent = 'url'
+    elif file_type == 'image' or content_type.startswith('image/'):
+        modality = 'image'
+        routing_intent = 'vision'
+    elif file_type == 'audio' or content_type.startswith(('audio/', 'video/')):
+        modality = 'audio'
+        routing_intent = 'audio'
+        transcription_requested = True
+    elif content_type in ('text/uri-list',):
+        modality = 'url'
+        routing_intent = 'url'
+
+    return {
+        'key': _get_attachment_key(file_item),
+        'id': file_item.get('id'),
+        'name': file_item.get('name'),
+        'content_type': content_type,
+        'modality': modality,
+        'routing_intent': routing_intent,
+        'transcription_requested': transcription_requested,
+    }
+
+
+def _build_attachment_hints(files: list[dict], metadata: Optional[dict] = None) -> list[dict]:
+    hints_by_key = {}
+
+    for hint in (metadata or {}).get('attachment_hints') or []:
+        key = str(hint.get('key') or hint.get('id') or hint.get('name') or hint.get('content_type') or len(hints_by_key))
+        hints_by_key[key] = {**hint, 'key': key}
+
+    for file_item in files:
+        inferred = _infer_attachment_hint(file_item)
+        key = inferred['key']
+        hints_by_key[key] = {
+            **inferred,
+            **hints_by_key.get(key, {}),
+            **{k: v for k, v in inferred.items() if v not in (None, '', False)},
+            'key': key,
+        }
+
+    return list(hints_by_key.values())
+
+
+def _classify_task(prompt: str, files: list[dict], messages: list[dict], attachment_hints: list[dict]) -> str:
+    has_image = _detect_message_images(messages) or any(
+        hint.get('modality') == 'image' for hint in attachment_hints
+    )
+    has_audio = any(hint.get('modality') == 'audio' for hint in attachment_hints)
+    has_url_file = any(hint.get('modality') == 'url' for hint in attachment_hints)
+    has_file = any(hint.get('modality') == 'file' for hint in attachment_hints)
 
     for file_item in files:
         file_type = (file_item.get('type') or '').lower()
@@ -81,7 +141,12 @@ def _get_model_capabilities(model: dict) -> dict:
     return ((model.get('info') or {}).get('meta') or {}).get('capabilities') or {}
 
 
-def _select_model(models: dict[str, dict], task_type: str, manual_override: Optional[str] = None) -> str:
+def _select_model(
+    models: dict[str, dict],
+    task_type: str,
+    manual_override: Optional[str] = None,
+    allow_fallback: bool = True,
+) -> Optional[str]:
     if manual_override and manual_override in models:
         return manual_override
 
@@ -102,10 +167,12 @@ def _select_model(models: dict[str, dict], task_type: str, manual_override: Opti
         if predicate(_get_model_capabilities(model)):
             return model_id
 
-    for model_id in models:
-        if model_id != ROUTER_MODEL_ID:
-            return model_id
-    return ROUTER_MODEL_ID
+    if allow_fallback:
+        for model_id in models:
+            if model_id != ROUTER_MODEL_ID:
+                return model_id
+        return ROUTER_MODEL_ID
+    return None
 
 
 def build_router_model_entry() -> dict:
@@ -133,6 +200,7 @@ def apply_router_decision(
     form_data: dict,
     metadata: dict,
     decision: RouterDecision,
+    attachment_hints: Optional[list[dict]] = None,
 ):
     features = form_data.get('features') or {}
     files = form_data.get('files') or []
@@ -156,6 +224,7 @@ def apply_router_decision(
     metadata['router_decision'] = decision.model_dump()
     metadata['selected_model_id'] = decision.selected_model
     metadata['manual_override'] = decision.manual_override
+    metadata['attachment_hints'] = attachment_hints or metadata.get('attachment_hints') or []
     return form_data, metadata
 
 
@@ -187,14 +256,20 @@ def maybe_transcribe_audio(request, form_data: dict, user) -> dict:
 
     file_path = _get_audio_file_path(audio_file)
     if not file_path:
-        return form_data
+        raise HTTPException(status_code=400, detail='Audio attachment could not be prepared for transcription.')
 
     from open_webui.routers.audio import transcribe
 
-    result = transcribe(request, file_path, user=user)
+    try:
+        result = transcribe(request, file_path, user=user)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f'Audio transcription is unavailable: {exc}') from exc
+
     transcript = (result or {}).get('text', '').strip()
     if not transcript:
-        return form_data
+        raise HTTPException(status_code=400, detail='Audio transcription returned empty text.')
 
     messages = form_data.get('messages', [])
     for message in reversed(messages):
@@ -217,10 +292,21 @@ def route_chat_request(request, form_data: dict, user, metadata: dict, model: di
         return form_data, metadata, model, None
 
     models = request.app.state.MODELS or {}
+    if manual_override and manual_override not in models:
+        raise HTTPException(status_code=404, detail=f'Manual model override {manual_override} is unavailable.')
+
     prompt = _extract_prompt(form_data.get('messages', []))
     files = form_data.get('files') or metadata.get('files') or []
-    task_type = _classify_task(prompt, files, form_data.get('messages', []))
-    selected_model = _select_model(models, task_type, manual_override=manual_override)
+    attachment_hints = _build_attachment_hints(files, metadata)
+    task_type = _classify_task(prompt, files, form_data.get('messages', []), attachment_hints)
+    selected_model = _select_model(
+        models,
+        task_type,
+        manual_override=manual_override,
+        allow_fallback=task_type in {'text', 'audio', 'file', 'url', 'web_research', 'image_generation'},
+    )
+    if not selected_model:
+        raise HTTPException(status_code=400, detail=f'No model is available for task type {task_type}.')
 
     tool_map = {
         'text': 'text_llm',
@@ -250,11 +336,29 @@ def route_chat_request(request, form_data: dict, user, metadata: dict, model: di
         short_reason=_build_reason(task_type, bool(manual_override)),
     )
 
-    form_data, metadata = apply_router_decision(request, form_data, metadata, decision)
+    if task_type == 'vision':
+        selected_caps = _get_model_capabilities(models.get(selected_model, {}))
+        if not selected_caps.get('vision'):
+            detail = (
+                f'Model {selected_model} does not support image understanding.'
+                if manual_override
+                else 'No vision-capable model is currently available for image understanding.'
+            )
+            raise HTTPException(status_code=400, detail=detail)
+
+    form_data, metadata = apply_router_decision(
+        request,
+        form_data,
+        metadata,
+        decision,
+        attachment_hints=attachment_hints,
+    )
     if task_type == 'audio':
         form_data = maybe_transcribe_audio(request, form_data, user)
         if not manual_override:
-            text_model = _select_model(models, 'text')
+            text_model = _select_model(models, 'text', allow_fallback=False)
+            if not text_model:
+                raise HTTPException(status_code=400, detail='No text model is available for the post-ASR chat step.')
             decision.selected_model = text_model
             metadata['router_decision'] = decision.model_dump()
             metadata['selected_model_id'] = text_model
