@@ -112,6 +112,16 @@
 			usage?: unknown;
 		};
 		annotation?: { type: string; rating: number };
+		selectedModelId?: string;
+		routerDecision?: {
+			selected_model?: string;
+			selected_tool?: string;
+			manual_override?: boolean;
+		};
+		requestMode?: 'auto' | 'manual';
+		researchEnabled?: boolean;
+		memoryEnabled?: boolean;
+		memorySaved?: boolean;
 	}
 
 	export let chatId = '';
@@ -173,6 +183,29 @@
 		(model?.info?.meta?.capabilities?.status_updates ?? true) &&
 		statusEntries.length > 0 &&
 		!(statusEntries.at(-1)?.hidden ?? false);
+	$: effectiveModelId = message?.selectedModelId ?? message?.routerDecision?.selected_model ?? message?.model;
+	$: effectiveModelName = $models.find((m) => m.id === effectiveModelId)?.name ?? effectiveModelId;
+	$: effectiveMode =
+		message?.routerDecision?.manual_override || message?.requestMode === 'manual' ? 'Manual' : 'Auto';
+	$: toolStatus = [...statusEntries]
+		.reverse()
+		.find((entry) => entry?.action && !['completion', 'done'].includes(entry.action));
+	$: effectiveTool =
+		message?.routerDecision?.selected_tool ??
+		toolStatus?.action ??
+		(message?.researchEnabled ? 'web_research' : 'text_llm');
+	$: effectiveToolLabel =
+		!message?.done && !message?.routerDecision && !toolStatus
+			? 'Routing...'
+			: effectiveTool.replaceAll('_', ' ');
+	$: memoryStateLabel =
+		!message?.memoryEnabled
+			? 'Memory disabled'
+			: !message?.done
+				? 'Memory pending'
+				: message?.memorySaved
+					? 'Memory saved'
+					: 'Memory unchanged';
 
 	let edit = false;
 	let editedContent = '';
@@ -637,9 +670,9 @@
 
 		<div class="flex-auto w-0 pl-1 relative">
 			<Name>
-				<Tooltip content={model?.name ?? message.model} placement="top-start">
+				<Tooltip content={effectiveModelName ?? model?.name ?? message.model} placement="top-start">
 					<span id="response-message-model-name" class="line-clamp-1 text-black dark:text-white">
-						{model?.name ?? message.model}
+						{effectiveModelName ?? model?.name ?? message.model}
 					</span>
 				</Tooltip>
 
@@ -661,6 +694,23 @@
 					</div>
 				{/if}
 			</Name>
+
+			<div class="mb-2 flex flex-wrap gap-1.5 text-[11px]" data-testid="assistant-transparency-row">
+				<span class="px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
+					{effectiveMode}
+				</span>
+				<span class="px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
+					{effectiveToolLabel}
+				</span>
+				<span class="px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
+					{memoryStateLabel}
+				</span>
+				{#if !message.done}
+					<span class="px-2 py-1 rounded-full bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-200">
+						Streaming
+					</span>
+				{/if}
+			</div>
 
 			<div>
 				<div class="chat-{message.role} w-full min-w-full markdown-prose">

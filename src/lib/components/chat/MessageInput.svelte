@@ -67,6 +67,8 @@
 
 	import InputMenu from './MessageInput/InputMenu.svelte';
 	import VoiceRecording from './MessageInput/VoiceRecording.svelte';
+	import AttachWebpageModal from './MessageInput/AttachWebpageModal.svelte';
+	import ModelSelector from './ModelSelector.svelte';
 
 	import ToolServersModal from './ToolServersModal.svelte';
 
@@ -130,10 +132,15 @@
 	export let imageGenerationEnabled = false;
 	export let webSearchEnabled = false;
 	export let codeInterpreterEnabled = false;
+	export let orchestrationMode: 'auto' | 'manual' = 'auto';
+	export let memoryEnabled = true;
+	export let safeModeEnabled = false;
+	export let showMemoryPanel = false;
 
 	export let pendingOAuthTools = [];
 
 	let showTerminalMenu = false;
+	let showAttachWebpageModal = false;
 
 	export let messageQueue: { id: string; prompt: string; files: any[] }[] = [];
 	export let onQueueSendNow: (id: string) => void = () => {};
@@ -515,8 +522,21 @@
 		$config?.features?.enable_code_interpreter &&
 		($_user.role === 'admin' || $_user?.permissions?.features?.code_interpreter);
 
+	let currentModelLabels = [];
+	$: currentModelLabels = (atSelectedModel?.id ? [atSelectedModel.id] : selectedModels)
+		.filter(Boolean)
+		.map((id) => $models.find((model) => model.id === id)?.name ?? id);
+
 	// Disable code interpreter when terminal is active (mutually exclusive)
 	$: if ($selectedTerminalId && codeInterpreterEnabled) {
+		codeInterpreterEnabled = false;
+	}
+
+	$: if (safeModeEnabled) {
+		selectedToolIds = [];
+		selectedFilterIds = [];
+		webSearchEnabled = false;
+		imageGenerationEnabled = false;
 		codeInterpreterEnabled = false;
 	}
 
@@ -1082,6 +1102,13 @@
 
 <ToolServersModal bind:show={showTools} {selectedToolIds} />
 
+<AttachWebpageModal
+	bind:show={showAttachWebpageModal}
+	onSubmit={(event) => {
+		onUpload(event);
+	}}
+/>
+
 <InputVariablesModal
 	bind:show={showInputVariablesModal}
 	variables={inputVariables}
@@ -1242,6 +1269,152 @@
 								: ' border-gray-100/30 dark:border-gray-850/30 hover:border-gray-200 focus-within:border-gray-100 hover:dark:border-gray-800 focus-within:dark:border-gray-800'}  transition px-1 bg-white/5 dark:bg-gray-500/5 backdrop-blur-sm dark:text-gray-100"
 							dir={$settings?.chatDirection ?? 'auto'}
 						>
+							<div class="px-3 pt-3 pb-2 border-b border-gray-100/70 dark:border-gray-800/70">
+								<div class="flex flex-col gap-2">
+									<div class="flex flex-wrap items-center gap-2">
+										<div
+											class="inline-flex rounded-full bg-gray-100 dark:bg-gray-900 p-0.5"
+											data-testid="chat-mode-switch"
+										>
+											<button
+												type="button"
+												class={`px-3 py-1.5 rounded-full text-xs font-medium transition ${orchestrationMode === 'auto'
+													? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
+													: 'text-gray-600 dark:text-gray-300'}`}
+												on:click={() => {
+													orchestrationMode = 'auto';
+												}}
+											>
+												Auto
+											</button>
+											<button
+												type="button"
+												class={`px-3 py-1.5 rounded-full text-xs font-medium transition ${orchestrationMode === 'manual'
+													? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
+													: 'text-gray-600 dark:text-gray-300'}`}
+												on:click={() => {
+													orchestrationMode = 'manual';
+												}}
+											>
+												Manual
+											</button>
+										</div>
+
+										<div class="min-w-[15rem] flex-1 max-w-md" data-testid="chat-model-selector">
+											<ModelSelector bind:selectedModels showSetDefault={false} />
+										</div>
+									</div>
+
+									<div class="flex flex-wrap items-center gap-2">
+										<button
+											type="button"
+											class="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900"
+											on:click={() => {
+												filesInputElement?.click();
+											}}
+											aria-label={$i18n.t('Upload files')}
+											data-testid="chat-upload-button"
+										>
+											{$i18n.t('Upload')}
+										</button>
+										<button
+											type="button"
+											class="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900"
+											on:click={() => {
+												showAttachWebpageModal = true;
+											}}
+											aria-label={$i18n.t('Attach URL')}
+											data-testid="chat-url-button"
+										>
+											URL
+										</button>
+										<button
+											type="button"
+											class="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900"
+											on:click={() => {
+												document.getElementById('voice-input-button')?.click();
+											}}
+											aria-label={$i18n.t('Voice input')}
+											data-testid="chat-voice-button"
+										>
+											{$i18n.t('Voice')}
+										</button>
+										<button
+											type="button"
+											class={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${webSearchEnabled && !safeModeEnabled
+												? 'border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-200'
+												: 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900'}`}
+											on:click={() => {
+												webSearchEnabled = !webSearchEnabled;
+											}}
+											disabled={safeModeEnabled || !showWebSearchButton}
+											data-testid="chat-research-toggle"
+										>
+											{$i18n.t('Research')}
+										</button>
+										<button
+											type="button"
+											class={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${memoryEnabled && !safeModeEnabled
+												? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200'
+												: 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900'}`}
+											on:click={() => {
+												memoryEnabled = !memoryEnabled;
+											}}
+											data-testid="chat-memory-toggle"
+										>
+											{$i18n.t('Memory')}
+										</button>
+										<button
+											type="button"
+											class={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${showMemoryPanel
+												? 'border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900'
+												: 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900'}`}
+											on:click={() => {
+												showMemoryPanel = !showMemoryPanel;
+											}}
+											data-testid="chat-memory-panel-toggle"
+										>
+											{$i18n.t('Panel')}
+										</button>
+										<button
+											type="button"
+											class={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${safeModeEnabled
+												? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200'
+												: 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900'}`}
+											on:click={() => {
+												safeModeEnabled = !safeModeEnabled;
+											}}
+											data-testid="chat-safe-mode-toggle"
+										>
+											{$i18n.t('Safe mode')}
+										</button>
+									</div>
+
+									<div
+										class="flex flex-wrap items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400"
+										data-testid="chat-transparency-row"
+									>
+										<span class="px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-900">
+											{orchestrationMode === 'auto' ? 'Auto routing' : 'Manual model'}
+										</span>
+										<span class="px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-900">
+											{currentModelLabels.length > 0 ? currentModelLabels.join(', ') : 'No model'}
+										</span>
+										<span class="px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-900">
+											{safeModeEnabled ? 'Safe mode on' : 'Safe mode off'}
+										</span>
+										<span class="px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-900">
+											{memoryEnabled && !safeModeEnabled ? 'Memory on' : 'Memory off'}
+										</span>
+										{#if selectedToolIds.length > 0}
+											<span class="px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-900">
+												{selectedToolIds.length} {$i18n.t('tool(s) armed')}
+											</span>
+										{/if}
+									</div>
+								</div>
+							</div>
+
 							{#if atSelectedModel !== undefined}
 								<div class="px-3 pt-3 text-left w-full flex flex-col z-10">
 									<div class="flex items-center justify-between w-full">

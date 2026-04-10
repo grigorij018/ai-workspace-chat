@@ -1,5 +1,48 @@
 # Status
 
+## 2026-04-11
+
+### Completed in `feat/chat-panel-manual-mode`
+
+- Added a unified orchestration bar directly into the chat composer with `Auto / Manual`, model selector, upload, URL attach, voice, research, memory, memory panel, and safe mode controls.
+- Kept the single-chat OpenWebUI flow intact while routing chat requests through `mws/router` and using `metadata.manual_override` for manual model selection.
+- Added assistant-side transparency chips for effective mode, resolved model, inferred/returned tool path, memory result, and live streaming state.
+- Added a dedicated in-chat memory panel that lists remembered facts, supports per-item deletion, and allows full memory clearing.
+- Preserved existing markdown/code/table/citation/image/file rendering while improving chat-level transparency around the response lifecycle.
+- Added Cypress smoke coverage for the new unified chat controls and memory panel toggle.
+
+### Contract Check
+
+- Reused the existing request contract from `docs/CONTRACTS.md` without introducing new backend fields.
+- Frontend now actively uses the documented `metadata.manual_override` and `metadata.memory` fields.
+
+### Final pass in `feat/chat-panel-manual-mode`
+
+- Verified the new UI remains layered on top of the base OpenWebUI chat rendering path instead of replacing it with separate screens.
+- Markdown rendering remains covered by `src/lib/components/chat/Messages/Markdown.svelte` and `MarkdownTokens.svelte`.
+- Code blocks and copy-code remain covered by `src/lib/components/chat/Messages/CodeBlock.svelte` via the existing `copyCode()` control.
+- Table rendering remains covered by the existing `MarkdownTokens.svelte` table branch and CSV export affordance.
+- Image preview remains covered by existing `Image` usage in composer attachments and assistant message files.
+- File chips remain covered by existing `FileItem` usage in composer attachments and assistant message files.
+- Citations/source rendering remains covered by `src/lib/components/chat/Messages/Citations.svelte`, mounted from `ResponseMessage.svelte` for `sources` and `citations`.
+- Improved assistant progress transparency: pending responses now show `Routing...`, `Streaming`, and `Memory pending` states until router/tool/memory metadata resolves.
+- Memory transparency now distinguishes `Memory disabled`, `Memory pending`, `Memory saved`, and `Memory unchanged`.
+
+### Demo Artifacts
+
+- `demo-assets/ui/01-unified-chat-controls.svg`: unified composer controls preview.
+- `demo-assets/ui/02-assistant-transparency.svg`: assistant model/tool/memory/streaming chips preview.
+- `demo-assets/ui/03-memory-panel.svg`: in-chat memory panel preview.
+- `demo-assets/ui/04-rendering-coverage.svg`: rendering coverage preview for markdown, tables, code, files, images, and citations.
+- These are static presentation preview captures because this workstation has no installed frontend dependencies; refresh with runtime screenshots after `node_modules` is restored.
+
+### Verification Notes
+
+- `git diff --check`: passed.
+- Local code sanity check confirmed existing OpenWebUI render components still own markdown, code blocks, copy code, tables, image previews, file chips, and citations.
+- `npm run check`: not run successfully because `node_modules` is absent and `svelte-kit` is unavailable.
+- `npm run build`: not run successfully because `node_modules` is absent and `pyodide` cannot be resolved from `scripts/prepare-pyodide.js`.
+
 ## 2026-04-10
 
 ### Completed in `chore/infra-release-readme`

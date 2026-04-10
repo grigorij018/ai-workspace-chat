@@ -92,6 +92,7 @@
 	import { createOpenAITextStream } from '$lib/apis/streaming';
 	import { getFunctions } from '$lib/apis/functions';
 	import { updateFolderById } from '$lib/apis/folders';
+	import { getMemories } from '$lib/apis/memories';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -107,6 +108,7 @@
 	import Sidebar from '../icons/Sidebar.svelte';
 	import Image from '../common/Image.svelte';
 	import { getBanners } from '$lib/apis/configs';
+	import MemoryPanel from './MemoryPanel.svelte';
 
 	export let chatIdProp = '';
 
@@ -151,6 +153,20 @@
 	let codeInterpreterEnabled = false;
 
 	let showCommands = false;
+	let orchestrationMode: 'auto' | 'manual' = 'auto';
+	let memoryEnabled = true;
+	let safeModeEnabled = false;
+	let showMemoryPanel = false;
+	let memoryRefreshKey = 0;
+	let knownMemoryIds: string[] = [];
+
+	$: if (safeModeEnabled) {
+		selectedToolIds = [];
+		selectedFilterIds = [];
+		webSearchEnabled = false;
+		imageGenerationEnabled = false;
+		codeInterpreterEnabled = false;
+	}
 
 	let generating = false;
 	let dragged = false;
@@ -187,6 +203,8 @@
 		selectedFilterIds = [];
 		webSearchEnabled = false;
 		imageGenerationEnabled = false;
+		memoryEnabled = $settings?.memory ?? true;
+		safeModeEnabled = false;
 
 		const storageChatInput = sessionStorage.getItem(
 			`chat-input${chatIdProp ? `-${chatIdProp}` : ''}`
@@ -283,6 +301,37 @@
 		if (selectedModelIds.filter((id) => id).length > 0) {
 			setDefaults();
 		}
+	};
+
+	const refreshKnownMemories = async () => {
+		try {
+			const memories = await getMemories(localStorage.token);
+			knownMemoryIds = memories.map((memory) => memory.id);
+			return memories;
+		} catch (e) {
+			console.error('Failed to refresh memories', e);
+			return [];
+		}
+	};
+
+	const detectMemoryWrite = async (messageId: string) => {
+		if (!history.messages[messageId]) {
+			return;
+		}
+
+		if (!history.messages[messageId].memoryEnabled) {
+			history.messages[messageId].memorySaved = false;
+			history = history;
+			return;
+		}
+
+		const before = new Set(knownMemoryIds);
+		const memories = await refreshKnownMemories();
+		const wroteMemory = memories.some((memory) => !before.has(memory.id));
+
+		history.messages[messageId].memorySaved = wroteMemory;
+		history = history;
+		memoryRefreshKey += 1;
 	};
 
 	const setDefaults = async () => {
@@ -726,6 +775,9 @@
 		);
 
 		const init = async () => {
+			memoryEnabled = $settings?.memory ?? true;
+			await refreshKnownMemories();
+
 			if (!chatIdProp) {
 				loading = false;
 				await tick();
@@ -1586,7 +1638,18 @@
 	};
 
 	const chatCompletionEventHandler = async (data, message, chatId) => {
-		const { id, done, choices, content, output, sources, selected_model_id, error, usage } = data;
+		const {
+			id,
+			done,
+			choices,
+			content,
+			output,
+			sources,
+			selected_model_id,
+			router_decision,
+			error,
+			usage
+		} = data;
 
 		// Store raw OR-aligned output items from backend
 		if (output) {
@@ -1684,6 +1747,10 @@
 			message.arena = true;
 		}
 
+		if (router_decision) {
+			message.routerDecision = router_decision;
+		}
+
 		if (usage) {
 			message.usage = usage;
 		}
@@ -1742,6 +1809,7 @@
 				message.id,
 				createMessagesList(history, message.id)
 			);
+			detectMemoryWrite(message.id);
 
 			// Process next queued request if any
 			await processNextInQueue(chatId);
@@ -1937,6 +2005,10 @@
 					content: '',
 					model: model.id,
 					modelName: model.name ?? model.id,
+					requestMode: orchestrationMode,
+					researchEnabled: webSearchEnabled && !safeModeEnabled,
+					memoryEnabled: memoryEnabled && !safeModeEnabled,
+					safeMode: safeModeEnabled,
 					modelIdx: modelIdx ? modelIdx : _modelIdx,
 					timestamp: Math.floor(Date.now() / 1000) // Unix epoch
 				};
@@ -2028,17 +2100,17 @@
 				image_generation:
 					$config?.features?.enable_image_generation &&
 					($user?.role === 'admin' || $user?.permissions?.features?.image_generation)
-						? imageGenerationEnabled
+						? imageGenerationEnabled && !safeModeEnabled
 						: false,
 				code_interpreter:
 					$config?.features?.enable_code_interpreter &&
 					($user?.role === 'admin' || $user?.permissions?.features?.code_interpreter)
-						? codeInterpreterEnabled
+						? codeInterpreterEnabled && !safeModeEnabled
 						: false,
 				web_search:
 					$config?.features?.enable_web_search &&
 					($user?.role === 'admin' || $user?.permissions?.features?.web_search)
-						? webSearchEnabled
+						? webSearchEnabled && !safeModeEnabled
 						: false
 			};
 
@@ -2053,7 +2125,7 @@
 			}
 		}
 
-		if ($settings?.memory ?? false) {
+		if (memoryEnabled && !safeModeEnabled) {
 			features = { ...features, memory: true };
 		}
 
@@ -2224,12 +2296,14 @@
 
 		// Use the user-selected terminal from the dropdown
 		const activeTerminalId = $selectedTerminalId ?? null;
+		const manualOverride = orchestrationMode === 'manual' ? model.id : null;
+		const requestModel = 'mws/router';
 
 		const res = await generateOpenAIChatCompletion(
 			localStorage.token,
 			{
 				stream: stream,
-				model: model.id,
+				model: requestModel,
 				messages: messages,
 				params: {
 					...$settings?.params,
@@ -2239,8 +2313,8 @@
 
 				files: (files?.length ?? 0) > 0 ? files : undefined,
 
-				filter_ids: selectedFilterIds.length > 0 ? selectedFilterIds : undefined,
-				tool_ids: toolIds.length > 0 ? toolIds : undefined,
+				filter_ids: !safeModeEnabled && selectedFilterIds.length > 0 ? selectedFilterIds : undefined,
+				tool_ids: !safeModeEnabled && toolIds.length > 0 ? toolIds : undefined,
 				skill_ids: skillIds.length > 0 ? skillIds : undefined,
 				terminal_id: activeTerminalId ?? undefined,
 				tool_servers: [
@@ -2267,6 +2341,15 @@
 				id: responseMessageId,
 				parent_id: userMessage?.id ?? null,
 				parent_message: userMessage,
+				metadata: {
+					chat_id: _chatId,
+					message_id: responseMessageId,
+					manual_override: manualOverride,
+					memory: {
+						enabled: memoryEnabled && !safeModeEnabled,
+						save: memoryEnabled && !safeModeEnabled
+					}
+				},
 
 				background_tasks: {
 					...(!$temporaryChatEnabled &&
@@ -2323,6 +2406,11 @@
 			if (res.error) {
 				await handleOpenAIError(res.error, responseMessage);
 			} else {
+				if (res.router_decision) {
+					responseMessage.routerDecision = res.router_decision;
+					history.messages[responseMessageId] = responseMessage;
+				}
+
 				if (taskIds) {
 					taskIds.push(res.task_id);
 				} else {
@@ -2845,6 +2933,10 @@
 									{history}
 									{taskIds}
 									{selectedModels}
+									bind:orchestrationMode
+									bind:memoryEnabled
+									bind:safeModeEnabled
+									bind:showMemoryPanel
 									bind:files
 									bind:prompt
 									bind:autoScroll
@@ -2937,6 +3029,10 @@
 									bind:imageGenerationEnabled
 									bind:codeInterpreterEnabled
 									bind:webSearchEnabled
+									bind:orchestrationMode
+									bind:memoryEnabled
+									bind:safeModeEnabled
+									bind:showMemoryPanel
 									bind:atSelectedModel
 									bind:showCommands
 									bind:dragged
@@ -2986,6 +3082,7 @@
 					{eventTarget}
 					{codeInterpreterEnabled}
 				/>
+				<MemoryPanel bind:open={showMemoryPanel} refreshKey={memoryRefreshKey} />
 			</PaneGroup>
 		</div>
 	{:else if loading}
