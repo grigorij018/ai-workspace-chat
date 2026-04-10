@@ -1,5 +1,21 @@
 # Status
 
+## 2026-04-11
+
+### Completed in `feat/chat-panel-manual-mode`
+
+- Added a unified orchestration bar directly into the chat composer with `Auto / Manual`, model selector, upload, URL attach, voice, research, memory, memory panel, and safe mode controls.
+- Kept the single-chat OpenWebUI flow intact while routing chat requests through `mws/router` and using `metadata.manual_override` for manual model selection.
+- Added assistant-side transparency chips for effective mode, resolved model, inferred/returned tool path, memory result, and live streaming state.
+- Added a dedicated in-chat memory panel that lists remembered facts, supports per-item deletion, and allows full memory clearing.
+- Preserved existing markdown/code/table/citation/image/file rendering while improving chat-level transparency around the response lifecycle.
+- Added Cypress smoke coverage for the new unified chat controls and memory panel toggle.
+
+### Contract Check
+
+- Reused the existing request contract from `docs/CONTRACTS.md` without introducing new backend fields.
+- Frontend now actively uses the documented `metadata.manual_override` and `metadata.memory` fields.
+
 ## 2026-04-10
 
 ### Completed in `chore/infra-release-readme`

@@ -7,6 +7,7 @@
 - Local environment is missing `pytest`, so the new router tests were added but could not be executed through pytest.
 - Import-time backend smoke tests that load the full `open_webui` package are blocked by missing local Python dependencies such as `typer`.
 - Automatic memory extraction from completed assistant responses is not implemented yet; the current backend supports typed fact/summary records, retrieval before answer, preferences, and forget/delete semantics.
+- The frontend memory transparency badge can currently detect newly created memory rows, but it cannot prove semantic extraction success when backend memory behavior only updates existing records or skips auto-save entirely.
 
 ## Risks
 
@@ -22,3 +23,4 @@
 - Expand smoke tests only after the model IDs and auth/bootstrap policy are stable.
 - Install backend Python dependencies in the shared dev environment before running full router/backend test passes.
 - Treat automatic memory extraction as a follow-up implementation item, while keeping manual/typed memory records available for the demo path.
+- Validate the new auto/manual UI against a live MWS environment before merge so the displayed selected model and tool path match real router outputs in streaming mode.
