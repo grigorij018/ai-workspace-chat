@@ -14,7 +14,7 @@
 - Frontend type/svelte checks are blocked in this workspace because the local JS toolchain dependencies are not installed (`svelte-kit: command not found`).
 - Automatic memory extraction from completed assistant responses is not implemented yet; the current backend supports typed fact/summary records, retrieval before answer, preferences, and forget/delete semantics.
 - The frontend memory transparency badge can currently detect newly created memory rows, but it cannot prove semantic extraction success when backend memory behavior only updates existing records or skips auto-save entirely.
-- `git push` from this workstation may be blocked in some worktrees by SSH auth (`Permission denied (publickey)`), so completed local commits may need a working GitHub SSH key or an alternate push environment.
+- `git push` from this workstation is blocked for `feat/research-file-workflows` by SSH auth (`Permission denied (publickey)`), so completed local commits need a working GitHub SSH key or an alternate push environment.
 
 ## Risks
 

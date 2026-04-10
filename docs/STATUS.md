@@ -18,6 +18,8 @@
 - `python3 -m py_compile backend/open_webui/orchestrator/router.py backend/open_webui/orchestrator/research.py backend/open_webui/retrieval/loaders/main.py`: passed.
 - `python3 -m py_compile backend/open_webui/utils/middleware.py`: passed.
 - `PYTHONPATH=backend python3 -m unittest backend.open_webui.test.orchestrator.test_router`: blocked by missing local dependency `typer`.
+- `git commit -m "feat: wire research file workflows"`: created commit `d8167b45c`.
+- `git push origin feat/research-file-workflows`: blocked by workstation SSH auth (`Permission denied (publickey)`).
 - Live MWS RAG embedding, URL fetch, web search, and deep research verification still require valid `.env` credentials/provider settings.
 
 ### Completed in `feat/chat-panel-manual-mode`
