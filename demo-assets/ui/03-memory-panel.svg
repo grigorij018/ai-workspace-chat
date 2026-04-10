@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#f7f7f2"/>
+  <rect x="100" y="80" width="900" height="740" rx="34" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="1000" y="80" width="340" height="740" rx="0" fill="#fbfbf8" stroke="#d1d5db"/>
+  <text x="150" y="148" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#111827">Chat</text>
+  <rect x="150" y="680" width="800" height="88" rx="28" fill="#ffffff" stroke="#d1d5db"/>
+  <text x="190" y="732" font-family="Arial, sans-serif" font-size="20" fill="#6b7280">Memory panel opens without leaving chat</text>
+  <text x="1034" y="140" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#111827">Memory</text>
+  <text x="1034" y="172" font-family="Arial, sans-serif" font-size="14" fill="#6b7280">Transparent facts available to the assistant.</text>
+  <rect x="1034" y="214" width="272" height="126" rx="20" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="1058" y="250" font-family="Arial, sans-serif" font-size="12" fill="#9ca3af">FACT</text>
+  <text x="1058" y="286" font-family="Arial, sans-serif" font-size="16" fill="#111827">User prefers concise Russian answers.</text>
+  <text x="1058" y="318" font-family="Arial, sans-serif" font-size="13" fill="#6b7280">chat · Apr 11, 14:10</text>
+  <rect x="1034" y="362" width="272" height="126" rx="20" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="1058" y="398" font-family="Arial, sans-serif" font-size="12" fill="#9ca3af">SUMMARY</text>
+  <text x="1058" y="434" font-family="Arial, sans-serif" font-size="16" fill="#111827">Demo workspace focuses on routing.</text>
+  <text x="1058" y="466" font-family="Arial, sans-serif" font-size="13" fill="#6b7280">chat · Apr 11, 14:12</text>
+  <rect x="1034" y="724" width="150" height="42" rx="21" fill="#111827"/>
+  <text x="1064" y="751" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">Clear memory</text>
+</svg>

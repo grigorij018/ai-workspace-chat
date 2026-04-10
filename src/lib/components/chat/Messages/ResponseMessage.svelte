@@ -194,6 +194,18 @@
 		message?.routerDecision?.selected_tool ??
 		toolStatus?.action ??
 		(message?.researchEnabled ? 'web_research' : 'text_llm');
+	$: effectiveToolLabel =
+		!message?.done && !message?.routerDecision && !toolStatus
+			? 'Routing...'
+			: effectiveTool.replaceAll('_', ' ');
+	$: memoryStateLabel =
+		!message?.memoryEnabled
+			? 'Memory disabled'
+			: !message?.done
+				? 'Memory pending'
+				: message?.memorySaved
+					? 'Memory saved'
+					: 'Memory unchanged';
 
 	let edit = false;
 	let editedContent = '';
@@ -688,10 +700,10 @@
 					{effectiveMode}
 				</span>
 				<span class="px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
-					{effectiveTool.replaceAll('_', ' ')}
+					{effectiveToolLabel}
 				</span>
 				<span class="px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
-					{message?.memorySaved ? 'Memory saved' : message?.memoryEnabled ? 'Memory not saved' : 'Memory off'}
+					{memoryStateLabel}
 				</span>
 				{#if !message.done}
 					<span class="px-2 py-1 rounded-full bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-200">
