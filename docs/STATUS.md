@@ -14,6 +14,16 @@
 - Expanded `.env.example` with MWS-friendly STT/image-generation settings so multimodal config remains env-driven.
 - Added router integration coverage for attachment hints and manual vision rejection.
 - Added demo assets in `demo-assets/multimodal/` for audio and image smoke checks in the unified chat.
+- Added a lightweight dependency-free multimodal wiring smoke check in `scripts/smoke-multimodal-contract.py`.
+
+### Explicit End-to-End Path Check
+
+- Audio file upload path exists: `MessageInput.svelte` marks uploaded `audio/*` or `video/*` attachments as `type=audio`, `Chat.svelte` sends MIME-based `attachment_hints`, `router.py` classifies `audio`, calls existing ASR `transcribe`, prepends `[Audio transcript]`, and continues through the normal text chat model path.
+- Microphone recording path exists: `VoiceRecording.svelte` records via browser `MediaRecorder`, calls `transcribeAudio`, inserts the returned text into the existing composer, and uses the normal chat submit path. No separate multimodal screen was added.
+- Image understanding path exists: `MessageInput.svelte` uploads images through the normal file composer, `Chat.svelte` serializes user image files as OpenAI-style `image_url` parts and `vision` hints, and `router.py` selects a vision-capable model or returns a clear non-vision manual-model error.
+- Image generation path exists: generation prompts route to `features.image_generation`, `chat_image_generation_handler` calls the configured image backend, emits generated files through the existing chat file event channel, and response rendering shows the images as assistant message attachments.
+- MIME adapter influence is explicit: frontend hints are sent in `metadata.attachment_hints`, backend `_build_attachment_hints` merges/infers hints from `files`, and `_classify_task` consumes those hints before selecting `audio`, `vision`, `file`, or `url` routing.
+- Graceful degradation is implemented for missing vision support and ASR preparation/transcription failures; real MWS auth/model errors are surfaced through existing chat error/status handling.
 
 ### Capability / Access Check
 
@@ -31,6 +41,7 @@
 ### Verification Notes
 
 - `python3 -m compileall backend/open_webui/orchestrator/router.py backend/open_webui/routers/images.py backend/open_webui/utils/middleware.py backend/open_webui/test/orchestrator/test_router.py`: passed
+- `python3 scripts/smoke-multimodal-contract.py`: passed
 - `git diff --check`: passed
 - `curl -i https://api.gpt.mws.ru/v1/models`: reached MWS and returned `401` without API key
 - `curl -i -X POST https://api.gpt.mws.ru/v1/audio/transcriptions`: reached MWS and returned `401` without API key

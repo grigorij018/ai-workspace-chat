@@ -1,4 +1,5 @@
 import unittest
+import unittest.mock
 from types import SimpleNamespace
 
 from fastapi import HTTPException

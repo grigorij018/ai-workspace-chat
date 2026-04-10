@@ -162,3 +162,26 @@ Notes:
 - Assistant-side image generation returns generated image files as normal chat message attachments.
 - Streaming/file events should keep using the existing chat event channel and emit `chat:message:files` when generated artifacts are ready.
 - Soft failures for missing modality support or missing access should surface as normal chat errors/status updates instead of forcing a separate multimodal screen.
+
+## Multimodal Chat Paths
+
+Audio file upload:
+- Client uploads an audio/video MIME attachment through the normal chat composer.
+- The attachment adapter emits `routing_intent=audio` and `transcription_requested=true`.
+- Router runs ASR preprocessing, prepends the transcript as `[Audio transcript]`, switches to a text model when auto-routed, and continues through the normal chat completion path.
+- Missing file access, empty transcripts, missing ASR access, or unsupported audio MIME should return normal chat errors/status updates.
+
+Microphone input:
+- The existing `VoiceRecording` chat component records browser audio with `MediaRecorder`.
+- It calls the `/audio/transcriptions` frontend API helper and inserts returned text into the existing composer.
+- The user can then send that text through the same chat request pipeline as typed text.
+
+Image understanding:
+- Client sends the image attachment as an `image_url` content part plus an attachment hint with `routing_intent=vision`.
+- Router selects a vision-capable model when available.
+- If a manually selected model lacks vision capability, the request should fail gracefully with a chat-visible error instead of attempting a non-vision call.
+
+Image generation:
+- Text prompts matching generation intent set `features.image_generation=true`.
+- The backend image generation handler emits generated artifacts through the existing chat file event path.
+- Assistant messages render those generated images as normal message attachments with `id`, `name`, `content_type`, and `url` when available.
