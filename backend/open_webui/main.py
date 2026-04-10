@@ -72,6 +72,7 @@ from open_webui.routers import (
     analytics,
     audio,
     images,
+    orchestrator,
     ollama,
     openai,
     retrieval,
@@ -1491,6 +1492,7 @@ app.include_router(openai.router, prefix='/openai', tags=['openai'])
 app.include_router(pipelines.router, prefix='/api/v1/pipelines', tags=['pipelines'])
 app.include_router(tasks.router, prefix='/api/v1/tasks', tags=['tasks'])
 app.include_router(images.router, prefix='/api/v1/images', tags=['images'])
+app.include_router(orchestrator.router, prefix='/api/v1/orchestrator', tags=['orchestrator'])
 
 app.include_router(audio.router, prefix='/api/v1/audio', tags=['audio'])
 app.include_router(retrieval.router, prefix='/api/v1/retrieval', tags=['retrieval'])
@@ -1796,7 +1798,8 @@ async def chat_completion(
                 except Exception:
                     pass
 
-            ctx = build_chat_response_context(request, form_data, user, model, metadata, tasks, events)
+            resolved_model = request.app.state.MODELS.get(form_data.get('model'), model)
+            ctx = build_chat_response_context(request, form_data, user, resolved_model, metadata, tasks, events)
 
             return await process_chat_response(response, ctx)
         except asyncio.CancelledError:
